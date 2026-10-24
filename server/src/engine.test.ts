@@ -114,3 +114,12 @@ test("action labels name the object to paint into a scene", async () => {
   assert.equal(objectOf("Go to the hold"), "hold");
   assert.equal(objectOf("Look at the brass porthole"), "brass porthole");
 });
+
+test("wrong item uses explain what was observed", () => {
+  const state = play([["search_desk"]]).state;
+  const flavor = museum.actions.find((a) => a.roomId === "lobby" && !a.requires && !a.effects.moveTo && a.id !== "search_desk");
+  if (flavor) assert.match((useItem(museum, state, "badge", [flavor.id], "Exhibit sign") as { message: string }).message, /doesn't need the curator's badge/);
+  const archive = play([["search_desk"], ["go_archive"], ["inspect_terminal", "4417"], ["go_collection"]]).state;
+  const r = useItem(museum, archive, "badge", ["take_core"], "Memory core");
+  assert.equal(r.ok, false);
+});

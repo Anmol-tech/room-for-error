@@ -9,7 +9,7 @@ import { Inventory } from "./Inventory.tsx";
 import { KaneWindow } from "./KaneWindow.tsx";
 import { Keypad } from "./Keypad.tsx";
 import { Narration } from "./Narration.tsx";
-import { HistorySheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
+import { HistorySheet, NotebookSheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
 import { Scene } from "./Scene.tsx";
 import { updateSettings, useSettings } from "./settings.ts";
 import { play } from "./sound.ts";
@@ -46,6 +46,9 @@ export function Game() {
   const [hintBusy, setHintBusy] = useState(false);
   const [paused, setPaused] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [notebookOpen, setNotebookOpen] = useState(false);
+  const [notebookNew, setNotebookNew] = useState(false);
+  const [pulse, setPulse] = useState<{ actionIds: string[]; ok: boolean; key: number } | null>(null);
   const [directorOpen, setDirectorOpen] = useState(() => params.get("director") === "1");
   const creating = useRef(false);
 
@@ -111,7 +114,7 @@ export function Game() {
             setOffline(false);
             setView((cur) =>
               cur && cur.stats.moves === v.stats.moves
-                ? { ...cur, imageUrl: v.imageUrl, hotspots: v.hotspots, sceneUpdating: v.sceneUpdating, inventory: v.inventory }
+                ? { ...cur, imageUrl: v.imageUrl, hotspots: v.hotspots, sceneUpdating: v.sceneUpdating, inventory: v.inventory, notebook: v.notebook }
                 : cur,
             );
           })
@@ -131,7 +134,14 @@ export function Game() {
   const land = useCallback(
     (prev: SessionView, next: SessionView, fromKeypad: boolean) => {
       const before = new Set(prev.inventory.map((i) => i.id));
-      const gained = next.inventory.filter((i) => !before.has(i.id));
+      const known = new Set(prev.notebook.map((n) => n.id));
+      const clues = next.notebook.filter((n) => !known.has(n.id));
+      if (clues.length) setNotebookNew(true);
+      // New clues show in the "Found" toast next to items.
+      const gained = [
+        ...next.inventory.filter((i) => !before.has(i.id)),
+        ...clues.map((n) => ({ id: n.id, name: "New clue in your notebook", description: n.text, icon: "📓", imageUrl: null })),
+      ];
       const moved = next.roomId !== prev.roomId;
       setNewItems(gained.map((i) => i.id));
       setView(next);
@@ -163,7 +173,9 @@ export function Game() {
       if (!view) return;
       setBusy(true);
       try {
-        land(view, await api.act(view.sessionId, actionId, input), input !== undefined);
+        const next = await api.act(view.sessionId, actionId, input);
+        land(view, next, input !== undefined);
+        setPulse({ actionIds: [actionId], ok: next.messageKind !== "error", key: Date.now() });
       } catch {
         setOffline(true);
       } finally {
@@ -201,6 +213,7 @@ export function Game() {
           return;
         }
         land(view, next, false);
+        setPulse({ actionIds, ok: next.messageKind !== "error", key: Date.now() });
         // Keep the item selected after a miss so the player can try it somewhere else.
         if (next.messageKind !== "error") setSelected(null);
       } catch {
@@ -211,6 +224,8 @@ export function Game() {
     },
     [view, selected, land],
   );
+
+  const cancelUse = useCallback(() => setSelected(null), []);
 
   async function askHint() {
     if (!view) return;
@@ -283,6 +298,7 @@ export function Game() {
     <>
       {paused && <PauseMenu stats={view.stats} muted={muted} onToggleSound={toggleSound} onResume={() => setPaused(false)} onRestart={restart} allowRestart={!testMode} />}
       {historyOpen && <HistorySheet log={view.log} onClose={() => setHistoryOpen(false)} />}
+      {notebookOpen && <NotebookSheet entries={view.notebook} onClose={() => setNotebookOpen(false)} />}
       {directorOpen && <DirectorPanel adventureId={view.scenarioId} sessionVersion={view.scenarioVersion} onClose={() => setDirectorOpen(false)} />}
       {/* Kane at work, floating bottom-right while you play (not inside Kane's own test sessions). */}
       {!testMode && <KaneWindow adventureId={view.scenarioId} />}
@@ -319,6 +335,8 @@ export function Game() {
               selectedItem={selectedItem}
               onAction={onAction}
               onUse={onUse}
+              onCancelUse={cancelUse}
+              pulse={pulse}
             >
               {view.sceneUpdating && (
                 <p className="scene-updating" role="status">
@@ -365,7 +383,19 @@ export function Game() {
                 </div>
               )}
             </Narration>
-            <Inventory items={view.inventory} newItems={newItems} selected={selected} onSelect={setSelected} slots={HOTBAR_SLOTS} />
+            <Inventory
+              items={view.inventory}
+              newItems={newItems}
+              selected={selected}
+              onSelect={setSelected}
+              slots={HOTBAR_SLOTS}
+              notebookCount={view.notebook.length}
+              notebookNew={notebookNew}
+              onNotebook={() => {
+                setNotebookNew(false);
+                setNotebookOpen(true);
+              }}
+            />
           </div>
         </div>
       </main>
@@ -381,6 +411,7 @@ export function Game() {
           busy={busy}
           rejected={rejected}
           status={view.messageKind === "error" ? view.message : null}
+          notes={view.notebook}
         />
       )}
       {layers}

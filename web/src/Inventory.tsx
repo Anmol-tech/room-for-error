@@ -10,10 +10,14 @@ interface Props {
   selected: string | null;
   onSelect: (id: string | null) => void;
   slots: number;
+  notebookCount: number;
+  /** A clue was just written down. */
+  notebookNew: boolean;
+  onNotebook: () => void;
 }
 
 /** Floating hotbar: click an item to select it, then click an object in the room to use it. */
-export function Inventory({ items, newItems, selected, onSelect, slots }: Props) {
+export function Inventory({ items, newItems, selected, onSelect, slots, notebookCount, notebookNew, onNotebook }: Props) {
   const [peek, setPeek] = useState<string | null>(null);
   const empty = Math.max(0, slots - items.length);
   const peeked = items.find((i) => i.id === peek);
@@ -30,6 +34,20 @@ export function Inventory({ items, newItems, selected, onSelect, slots }: Props)
         </p>
       )}
       <ul className="dock-slots">
+        <li className="dock-cell">
+          <button
+            type="button"
+            className={`slot notebook-slot ${notebookNew ? "new" : ""}`}
+            onClick={onNotebook}
+            aria-label={`Notebook, ${notebookCount} ${notebookCount === 1 ? "clue" : "clues"}`}
+            title="Notebook"
+          >
+            <span className="slot-glyph" aria-hidden>
+              📓
+            </span>
+            {notebookCount > 0 && <span className="slot-count">{notebookCount}</span>}
+          </button>
+        </li>
         {items.map((i) => (
           <li key={i.id} className="dock-cell">
             <button

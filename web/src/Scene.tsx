@@ -16,6 +16,10 @@ interface Props {
   onAction: (action: ActionView) => void;
   /** Use the selected item on the object at this spot. */
   onUse: (actionIds: string[]) => void;
+  /** Drops the selected item (right click or Escape over the scene). */
+  onCancelUse: () => void;
+  /** The last action's object glows on success and shakes on failure; `key` replays it. */
+  pulse: { actionIds: string[]; ok: boolean; key: number } | null;
   /** Overlays drawn on top of the picture: transitions, keypad, ending, toasts. */
   children?: ReactNode;
 }
@@ -25,11 +29,20 @@ interface Props {
  * a small inspection panel beside it; with an item selected, clicking uses the item instead.
  * Objects are real buttons, so the room can be explored by keyboard too.
  */
-export function Scene({ url, alt, hotspots, actions, disabled, showHints, selectedItem, onAction, onUse, children }: Props) {
+export function Scene({ url, alt, hotspots, actions, disabled, showHints, selectedItem, onAction, onUse, onCancelUse, pulse, children }: Props) {
   const [layers, setLayers] = useState<{ url: string; key: number }[]>([]);
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // Where the selected item follows the pointer, as fractions of the canvas.
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!selectedItem) return setPointer(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCancelUse();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedItem, onCancelUse]);
 
   useEffect(() => {
     if (!url) return;
@@ -68,7 +81,21 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
   }
 
   return (
-    <figure className="canvas" onClick={(e) => e.target === e.currentTarget && setInspecting(null)}>
+    <figure
+      className={`canvas ${selectedItem ? "using" : ""}`}
+      onClick={(e) => e.target === e.currentTarget && setInspecting(null)}
+      onPointerMove={(e) => {
+        if (!selectedItem || e.pointerType !== "mouse") return;
+        const r = e.currentTarget.getBoundingClientRect();
+        setPointer({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height });
+      }}
+      onPointerLeave={() => setPointer(null)}
+      onContextMenu={(e) => {
+        if (!selectedItem) return;
+        e.preventDefault();
+        onCancelUse();
+      }}
+    >
       {layers.length === 0 && (
         <div className="canvas-wait">
           <span className="spinner" aria-hidden /> Painting the scene…
@@ -96,11 +123,12 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
           if (!spotActions.length) return null;
           const name = spot.object ?? spotActions[0].label;
           const label = selectedItem ? `Use ${selectedItem.name} on ${name.toLowerCase()}` : name;
+          const pulsed = pulse && spot.actionIds.some((id) => pulse.actionIds.includes(id));
           return (
             <button
-              key={keyOf(spot)}
+              key={pulsed ? `${keyOf(spot)}#${pulse.key}` : keyOf(spot)}
               type="button"
-              className={`spot ${inspecting === keyOf(spot) ? "active" : ""}`}
+              className={`spot ${inspecting === keyOf(spot) ? "active" : ""} ${pulsed ? (pulse.ok ? "pulse-ok" : "pulse-fail") : ""}`}
               style={{ left: `${spot.x * 100}%`, top: `${spot.y * 100}%`, width: `${spot.w * 100}%`, height: `${spot.h * 100}%`, zIndex: 1 + spot.layer }}
               aria-label={label}
               disabled={disabled}
@@ -118,6 +146,15 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
           );
         })}
       </div>
+
+      {selectedItem && pointer && (
+        <div className="cursor-item" style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }} aria-hidden>
+          {selectedItem.imageUrl ? <img src={selectedItem.imageUrl} alt="" /> : <span>{selectedItem.icon ?? "◆"}</span>}
+          <em>
+            {lit ? `Use ${selectedItem.name} on ${(lit.object ?? byId.get(lit.actionIds[0])?.label ?? "this").toLowerCase()}` : `Use ${selectedItem.name} on…`}
+          </em>
+        </div>
+      )}
 
       {open && (
         <InspectPanel

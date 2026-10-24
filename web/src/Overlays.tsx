@@ -1,3 +1,4 @@
+import type { SessionView } from "../../shared/schema.ts";
 // Full-canvas moments and sheets around the game: room transitions, pause menu, narration history.
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
@@ -143,6 +144,39 @@ export function HistorySheet({ log, onClose }: { log: LogEntry[]; onClose: () =>
             </li>
           ))}
         </ol>
+      </aside>
+    </div>
+  );
+}
+
+type NotebookEntry = SessionView["notebook"][number];
+
+/** Clues the player has found. It never lists undiscovered evidence or fills in answers. */
+export function NotebookSheet({ entries, onClose }: { entries: NotebookEntry[]; onClose: () => void }) {
+  useEscape(onClose);
+  return (
+    <div className="sheet-scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <aside className="sheet notebook" role="dialog" aria-modal="true" aria-labelledby="notebook-title">
+        <header className="sheet-head">
+          <h2 id="notebook-title">Notebook</h2>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close notebook" autoFocus>
+            ×
+          </button>
+        </header>
+        {entries.length ? (
+          <ol className="history-list">
+            {entries.map((e) => (
+              <li key={e.id} className="note-entry">
+                <p className="history-meta">
+                  {e.where} · {e.title}
+                </p>
+                <p className="history-text">{e.text}</p>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="notebook-empty">Clues you find, like codes and inscriptions, are written down here.</p>
+        )}
       </aside>
     </div>
   );

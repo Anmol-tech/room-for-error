@@ -25,7 +25,7 @@ export function visibleActions(scenario: Scenario, state: GameState): Action[] {
 
 export type ActionResult =
   | { ok: true; state: GameState; message: string }
-  | { ok: false; state: GameState; message: string; reason: "unknown" | "locked" | "wrong_code" | "ended" };
+  | { ok: false; state: GameState; message: string; reason: "unknown" | "locked" | "wrong_code" | "wrong_item" | "ended" };
 
 export function applyAction(scenario: Scenario, state: GameState, actionId: string, input?: string): ActionResult {
   if (state.endingId) return { ok: false, state, message: "The adventure is over.", reason: "ended" };
@@ -78,17 +78,32 @@ export type UseResult = ActionResult | { ok: false; state: GameState; message: s
  * Uses an inventory item on an object: picks the action at that object (one of `candidateIds`)
  * that needs this item and runs it. Code locks report back so the client can open the keypad.
  */
-export function useItem(scenario: Scenario, state: GameState, itemId: string, candidateIds: string[]): UseResult {
+export function useItem(scenario: Scenario, state: GameState, itemId: string, candidateIds: string[], objectName?: string): UseResult {
   const item = scenario.items.find((i) => i.id === itemId);
   if (!item || !state.inventory.includes(itemId)) return { ok: false, state, message: "You don't have that.", reason: "unknown" };
 
-  const action = visibleActions(scenario, state).find((a) => candidateIds.includes(a.id) && a.requires?.items?.includes(itemId));
-  if (!action) return { ok: false, state, message: `Nothing happens when you use the ${item.name.toLowerCase()} there.`, reason: "unknown" };
-  if (action.input && meetsRequirements(action, state)) {
-    return { ok: false, state, message: action.input.prompt, reason: "needs_input", actionId: action.id };
+  const here = visibleActions(scenario, state).filter((a) => candidateIds.includes(a.id));
+  const action = here.find((a) => a.requires?.items?.includes(itemId));
+  // Failures say what was observed without giving the answer away.
+  const thing = item.name.toLowerCase();
+  const target = objectName ? `the ${objectName.toLowerCase().replace(/^the\s+/, "")}` : "it";
+  if (!action) {
+    const wantsItem = here.some((a) => a.requires?.items?.length);
+    const message = !here.length
+      ? `There's nothing left to do with ${target}.`
+      : wantsItem
+        ? `The ${thing} doesn't fit ${target}. Something else might.`
+        : `${capitalize(target)} doesn't need the ${thing}. Try examining it instead.`;
+    return { ok: false, state, message, reason: "wrong_item" };
   }
+  if (!meetsRequirements(action, state)) {
+    return { ok: false, state, message: action.lockedMessage ?? `The ${thing} fits ${target}, but something else is still missing.`, reason: "locked" };
+  }
+  if (action.input) return { ok: false, state, message: action.input.prompt, reason: "needs_input", actionId: action.id };
   return applyAction(scenario, state, action.id);
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * First action on a shortest path from `state` to any ending (codes assumed known), or null.

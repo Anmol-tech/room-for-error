@@ -21,7 +21,7 @@ import { db } from "./db.ts";
 import { createScenario } from "./director.ts";
 import { applyAction, initialState, meetsRequirements, nextStep, useItem, visibleActions, type UseResult } from "./engine.ts";
 import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario } from "./flux.ts";
-import { withNotes, withoutNotes } from "./notes.ts";
+import { isNote, noteSource, withNotes, withoutNotes } from "./notes.ts";
 import { endingOpen, playerKaneState, rehearse } from "./rehearsal.ts";
 import { validateScenario, validateShape } from "./validator.ts";
 
@@ -343,9 +343,17 @@ export function getSessionView(id: string): SessionView {
       locked: !meetsRequirements(a, state),
       ...(a.input ? { inputPrompt: a.input.prompt } : {}),
     })),
-    inventory: state.inventory.map((i) => {
+    inventory: state.inventory.filter((i) => !isNote(i)).map((i) => {
       const item = scenario.items.find((x) => x.id === i)!;
       return { id: item.id, name: item.name, description: item.description, icon: item.icon ?? null, imageUrl: itemIconUrl(scenario, item) };
+    }),
+    notebook: state.inventory.filter(isNote).map((id) => {
+      const item = scenario.items.find((x) => x.id === id)!;
+      const source = noteSource(scenario, id);
+      const where = scenario.rooms.find((r) => r.id === source?.roomId);
+      const object = source && where ? imageHotspots(imageRow(scenario, where.id, where.sceneStates[0].id)).find((h) => h.actionId === source.id)?.object : undefined;
+      const title = object ?? source?.label ?? item.name;
+      return { id, title: title.charAt(0).toUpperCase() + title.slice(1), text: item.description, where: where?.name ?? "" };
     }),
     message: row.message,
     messageKind: row.message_kind,
@@ -413,7 +421,11 @@ export function act(sessionId: string, actionId: string, input?: string): Sessio
 export function use(sessionId: string, itemId: string, actionIds: string[]): SessionView {
   const row = getSessionRow(sessionId);
   const scenario = getScenario(row.scenario_id, row.version);
-  const result = useItem(scenario, JSON.parse(row.state), itemId, actionIds);
+  const state: GameState = JSON.parse(row.state);
+  const room = scenario.rooms.find((r) => r.id === state.roomId)!;
+  const spots = imageHotspots(imageRow(scenario, room.id, state.sceneStates[room.id] ?? room.sceneStates[0].id));
+  const object = spots.find((h) => actionIds.includes(h.actionId))?.object;
+  const result = useItem(scenario, state, itemId, actionIds, object);
   if (!result.ok && result.reason === "needs_input") {
     // Nothing happened yet: the player still has to type the code.
     return { ...getSessionView(sessionId), openInputFor: result.actionId };

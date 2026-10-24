@@ -14,12 +14,14 @@ interface Props {
   rejected: number;
   /** Message for the last rejected code. */
   status: string | null;
+  /** The player's notebook, kept beside the lock so clues never need to be memorised. */
+  notes: { id: string; title: string; text: string }[];
 }
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"];
 
 /** Focused keypad dialog. Validation happens on the server; the field stays typeable. */
-export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy, rejected, status }: Props) {
+export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy, rejected, status, notes }: Props) {
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,6 +83,16 @@ export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy,
             </button>
           ))}
         </div>
+        {notes.length > 0 && (
+          <aside className="keypad-notes" aria-label="Your notebook">
+            <p className="keypad-notes-head">Your notebook</p>
+            {notes.map((n) => (
+              <p key={n.id}>
+                <strong>{n.title}:</strong> {n.text}
+              </p>
+            ))}
+          </aside>
+        )}
         <div className="keypad-actions">
           <button type="button" className="btn-ghost" onClick={onClose}>
             Step back

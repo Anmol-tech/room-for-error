@@ -30,6 +30,12 @@ function clueAction(scenario: Scenario, lock: Action): Action | undefined {
   );
 }
 
+export const isNote = (id: string) => id.startsWith(NOTE_PREFIX);
+
+/** The action that gives a note, in a scenario returned by withNotes. */
+export const noteSource = (scenario: Scenario, noteId: string): Action | undefined =>
+  scenario.actions.find((a) => a.effects.addItems?.includes(noteId));
+
 export function withNotes(scenario: Scenario): Scenario {
   const locks = scenario.actions.filter((a) => a.input);
   if (!locks.length) return scenario;
@@ -59,7 +65,6 @@ export function withNotes(scenario: Scenario): Scenario {
 
 /** Removes derived notes, so stored scenarios (and repairs) never carry a stale copy of a clue. */
 export function withoutNotes(scenario: Scenario): Scenario {
-  const isNote = (id: string) => id.startsWith(NOTE_PREFIX);
   return {
     ...scenario,
     items: scenario.items.filter((i) => !isNote(i.id)),
