@@ -6,11 +6,13 @@ export type NarrationSpeed = "slow" | "normal" | "fast" | "instant";
 export interface Settings {
   hints: boolean;
   narration: NarrationSpeed;
+  /** Theme music in rooms (sound effects follow the separate mute switch). */
+  music: boolean;
 }
 
 const KEY = "rfe-settings";
 const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-const DEFAULTS: Settings = { hints: false, narration: reducedMotion ? "instant" : "normal" };
+const DEFAULTS: Settings = { hints: false, narration: reducedMotion ? "instant" : "normal", music: true };
 
 let current: Settings = (() => {
   try {

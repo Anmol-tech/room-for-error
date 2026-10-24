@@ -409,6 +409,7 @@ export function getSessionView(id: string): SessionView {
     sessionId: row.id,
     scenarioId: scenario.id,
     scenarioVersion: scenario.version,
+    theme: scenario.theme,
     title: scenario.title,
     roomId: room.id,
     roomName: room.name,

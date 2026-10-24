@@ -136,6 +136,10 @@ export function Start() {
             <button type="button" role="switch" aria-checked={!muted} aria-labelledby="set-sound" className="switch" onClick={toggleSound}>
               <span />
             </button>
+            <span id="set-music">Music</span>
+            <button type="button" role="switch" aria-checked={settings.music} aria-labelledby="set-music" className="switch" onClick={() => updateSettings({ music: !settings.music })}>
+              <span />
+            </button>
           </div>
         </details>
 

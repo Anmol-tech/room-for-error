@@ -14,7 +14,8 @@ import { Narration } from "./Narration.tsx";
 import { HistorySheet, NotebookSheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
 import { Scene } from "./Scene.tsx";
 import { updateSettings, useSettings } from "./settings.ts";
-import { play } from "./sound.ts";
+import { moodFor, music, type Mood } from "./music.ts";
+import { play, setSilenced } from "./sound.ts";
 import { SoundOffIcon, SoundOnIcon } from "./Start.tsx";
 import { useSound } from "./useSound.ts";
 import { isImageModeration } from "../../shared/imageModeration.ts";
@@ -33,6 +34,8 @@ export function Game() {
   const testMode = params.get("test") === "1";
   const hints = testMode || hintsParam === "1" ? true : hintsParam === "0" ? false : settings.hints;
   const [muted, toggleSound] = useSound();
+  // One mood per adventure, from its theme, title and first room, so the music doesn't jump between rooms.
+  const moodRef = useRef<{ id: string; mood: Mood } | null>(null);
 
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +152,31 @@ export function Game() {
     const t = setTimeout(() => setToast(null), 2600);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Theme music: off in Kane's test mode, when muted or switched off, and once the adventure ends.
+  if (view && moodRef.current?.id !== view.scenarioId) {
+    moodRef.current = { id: view.scenarioId, mood: moodFor(view.theme, view.title, view.roomName, view.roomDescription) };
+  }
+  const musicOn = !!view && !testMode && settings.music && !muted && !view.ending;
+  useEffect(() => {
+    setSilenced(testMode);
+    return () => setSilenced(false);
+  }, [testMode]);
+  useEffect(() => {
+    if (musicOn && moodRef.current && view) music.play(moodRef.current.mood, view.roomIndex, view.title);
+    else music.stop();
+  }, [musicOn, view?.scenarioId, view?.title]);
+  useEffect(() => music.setLevel(view?.roomIndex ?? 0), [view?.roomIndex]);
+  useEffect(() => {
+    const unlock = () => music.unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      music.stop(0.6);
+    };
+  }, []);
 
   /** Applies a new session view from any action, with sounds, toasts and room transitions. */
   const land = useCallback(

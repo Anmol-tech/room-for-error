@@ -12,6 +12,12 @@ let muted = (() => {
 
 export const isMuted = () => muted;
 
+// Kane's test sessions are always silent, whatever the player's own setting.
+let silenced = false;
+export function setSilenced(value: boolean) {
+  silenced = value;
+}
+
 export function setMuted(value: boolean) {
   muted = value;
   try {
@@ -49,7 +55,7 @@ const SOUNDS = {
 export type Sound = keyof typeof SOUNDS;
 
 export function play(sound: Sound) {
-  if (muted) return;
+  if (muted || silenced) return;
   try {
     ctx ??= new AudioContext();
     if (ctx.state === "suspended") void ctx.resume();

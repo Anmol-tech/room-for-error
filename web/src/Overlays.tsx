@@ -100,6 +100,10 @@ export function PauseMenu({ stats, muted, onToggleSound, onResume, onRestart, al
           <button type="button" role="switch" aria-checked={!muted} aria-labelledby="p-sound" className="switch" onClick={onToggleSound}>
             <span />
           </button>
+          <span id="p-music">Music</span>
+          <button type="button" role="switch" aria-checked={settings.music} aria-labelledby="p-music" className="switch" onClick={() => updateSettings({ music: !settings.music })}>
+            <span />
+          </button>
         </div>
         <div className="pause-actions">
           <button type="button" className="btn-primary" onClick={onResume} autoFocus>
