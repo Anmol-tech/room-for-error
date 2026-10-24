@@ -307,6 +307,8 @@ export interface SessionView {
   hotspots: Hotspot[];
   actions: ActionView[];
   inventory: { id: Id; name: string; description: string; icon: string | null; imageUrl: string | null }[];
+  /** Clues the player has actually found (derived notes), kept apart from usable items. */
+  notebook: { id: Id; title: string; text: string; where: string }[];
   /** Result of the last action: narrative, locked message, or failed code. */
   message: string | null;
   messageKind: "info" | "success" | "error" | null;
