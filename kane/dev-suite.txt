@@ -1,0 +1,9 @@
+# Kane dev suite: plain-English checks for the app itself (not generated missions).
+# One objective per line. Run each against the local app and fix the app until all pass.
+# Base URL: http://localhost:5180
+
+Open the start page, verify a theme input and a "Create adventure" button are visible, and verify example themes are listed.
+Open /play/museum, click "Search desk", verify "Curator's badge" appears in the inventory, then click "Use badge on security door" and verify the Archive room is shown.
+Open /play/museum and click "Use badge on security door" without searching the desk first. Verify a message says the door needs a staff badge and the Lobby is still shown.
+Open /play/museum, search the desk, use the badge on the door, take the fuse, enter code 4417 at the terminal, enter the vault, take the memory core, power the service hatch, and verify the "Tunnel Escape" ending is shown.
+Open the director panel and verify each Kane run shows a status, a scenario version, and that runs recorded earlier are labeled "Prior run".

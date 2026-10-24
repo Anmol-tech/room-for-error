@@ -1,0 +1,284 @@
+{
+  "id": "museum",
+  "version": 2,
+  "theme": "A cyberpunk museum that stores stolen memories",
+  "title": "The Memory Vault",
+  "briefing": "Neon rain hammers the glass dome of the Mnemos Museum. Somewhere inside, behind a vault no visitor has ever seen, sits the memory core holding a whole city's stolen past. The night curator left in a hurry. You have until the security sweep finishes to get the core and get out.",
+  "startRoomId": "lobby",
+  "notes": "DEMO DEFECT: the sticky note in search_desk says the terminal code is 4471, but inspect_terminal expects 4417. The validator cannot see this (it is prose). Kane following the clue will fail at the terminal. Expected repair: make the clue and the answer agree.",
+  "rooms": [
+    {
+      "id": "lobby",
+      "name": "Lobby",
+      "description": "A dim reception hall. Holographic exhibit signs flicker over a curator's desk cluttered with papers. A security door leads to the Archive.",
+      "sceneStates": [
+        {
+          "id": "default",
+          "imagePrompt": "Cyberpunk museum lobby at night, neon rain on a glass dome, holographic exhibit signs, cluttered curator's desk, heavy security door, cinematic wide shot"
+        },
+        {
+          "id": "desk_searched",
+          "imagePrompt": "Same lobby, the curator's desk drawers pulled open and papers scattered"
+        }
+      ]
+    },
+    {
+      "id": "archive",
+      "name": "Archive",
+      "description": "Rows of humming memory drives. A glowing terminal sits beside a massive circular vault door. A fuse cabinet hangs open on the wall.",
+      "sceneStates": [
+        {
+          "id": "default",
+          "imagePrompt": "Cyberpunk archive room with rows of glowing memory drives, a terminal beside a massive closed circular vault door, open fuse cabinet on the wall"
+        },
+        {
+          "id": "vault_open",
+          "imagePrompt": "Same archive, the circular vault door now swung wide open with light spilling out"
+        }
+      ]
+    },
+    {
+      "id": "collection",
+      "name": "Collection",
+      "description": "The vault's inner chamber. On a pedestal under a spotlight floats the memory core. A rooftop ladder and a service hatch are the only ways out.",
+      "sceneStates": [
+        {
+          "id": "default",
+          "imagePrompt": "Inner vault chamber, a glowing memory core floating above a pedestal under a spotlight, a ladder to a rooftop hatch, a small service hatch in the wall"
+        },
+        {
+          "id": "core_taken",
+          "imagePrompt": "Same chamber, the pedestal now empty, red emergency lighting flashing"
+        }
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "badge",
+      "name": "Curator's badge",
+      "description": "Opens staff doors. The rooftop ladder scanner also accepts it.",
+      "consumable": false,
+      "icon": "🪪"
+    },
+    {
+      "id": "fuse",
+      "name": "Spare fuse",
+      "description": "A glowing glass fuse. Might power something.",
+      "consumable": true,
+      "icon": "🔋"
+    },
+    {
+      "id": "memory_core",
+      "name": "Memory core",
+      "description": "A warm, humming sphere holding a city's stolen memories.",
+      "consumable": false,
+      "icon": "🔮"
+    }
+  ],
+  "actions": [
+    {
+      "id": "search_desk",
+      "roomId": "lobby",
+      "label": "Search desk",
+      "once": true,
+      "effects": {
+        "addItems": [
+          "badge"
+        ],
+        "sceneState": "desk_searched"
+      },
+      "narrative": "Under a stack of visitor logs you find the curator's badge. A sticky note on the monitor reads: \"Archive terminal: 4471. Don't forget again!\""
+    },
+    {
+      "id": "go_archive",
+      "roomId": "lobby",
+      "label": "Use badge on security door",
+      "requires": {
+        "items": [
+          "badge"
+        ]
+      },
+      "lockedMessage": "The security door buzzes red. It needs a staff badge.",
+      "effects": {
+        "moveTo": "archive"
+      },
+      "narrative": "The door slides open with a hiss. You step into the Archive."
+    },
+    {
+      "id": "go_lobby",
+      "roomId": "archive",
+      "label": "Return to lobby",
+      "effects": {
+        "moveTo": "lobby"
+      },
+      "narrative": "You head back to the lobby."
+    },
+    {
+      "id": "take_fuse",
+      "roomId": "archive",
+      "label": "Take fuse from cabinet",
+      "once": true,
+      "effects": {
+        "addItems": [
+          "fuse"
+        ]
+      },
+      "narrative": "You pocket a spare fuse. It glows faintly in your hand."
+    },
+    {
+      "id": "inspect_terminal",
+      "roomId": "archive",
+      "label": "Inspect terminal",
+      "once": true,
+      "input": {
+        "kind": "code",
+        "prompt": "VAULT ACCESS: enter 4-digit code",
+        "answer": "4417",
+        "failMessage": "ACCESS DENIED. The terminal flashes red."
+      },
+      "effects": {
+        "setFlags": [
+          "vault_open"
+        ],
+        "sceneState": "vault_open"
+      },
+      "narrative": "ACCESS GRANTED. With a deep groan, the vault door swings open."
+    },
+    {
+      "id": "go_collection",
+      "roomId": "archive",
+      "label": "Enter vault",
+      "requires": {
+        "flags": [
+          "vault_open"
+        ]
+      },
+      "lockedMessage": "The vault door is sealed shut.",
+      "effects": {
+        "moveTo": "collection"
+      },
+      "narrative": "You step through the vault door into the inner chamber."
+    },
+    {
+      "id": "take_core",
+      "roomId": "collection",
+      "label": "Take memory core",
+      "once": true,
+      "effects": {
+        "addItems": [
+          "memory_core"
+        ],
+        "setFlags": [
+          "alarm"
+        ],
+        "sceneState": "core_taken"
+      },
+      "narrative": "The core is warm in your hands. The spotlight dies and red emergency lights start flashing. Move!"
+    },
+    {
+      "id": "escape_rooftop",
+      "roomId": "collection",
+      "label": "Climb to rooftop",
+      "requires": {
+        "items": [
+          "memory_core",
+          "badge"
+        ]
+      },
+      "lockedMessage": "The ladder scanner blinks: staff badge required. And you came here for the core.",
+      "effects": {
+        "ending": "rooftop"
+      },
+      "narrative": "You badge the scanner and climb into the rain."
+    },
+    {
+      "id": "escape_service",
+      "roomId": "collection",
+      "label": "Power service hatch",
+      "requires": {
+        "items": [
+          "memory_core",
+          "fuse"
+        ]
+      },
+      "lockedMessage": "The service hatch is dead. It needs a fuse. And you came here for the core.",
+      "effects": {
+        "removeItems": [
+          "fuse"
+        ],
+        "ending": "service"
+      },
+      "narrative": "You slot in the fuse. The hatch whirs open onto a maintenance tunnel."
+    },
+    {
+      "id": "read_holo_signs",
+      "roomId": "lobby",
+      "label": "Read the holographic signs",
+      "effects": {},
+      "narrative": "The signs cycle through exhibits: \"First Kiss, Anonymous Donor\", \"A Summer in 1999\". Someone has scrawled GIVE THEM BACK across the last one."
+    },
+    {
+      "id": "look_up_dome",
+      "roomId": "lobby",
+      "label": "Look up at the glass dome",
+      "effects": {},
+      "narrative": "Neon rain streaks the dome. A patrol drone drifts overhead, its searchlight sweeping the empty halls. Not much time."
+    },
+    {
+      "id": "examine_drives",
+      "roomId": "archive",
+      "label": "Examine the memory drives",
+      "effects": {},
+      "narrative": "Each drive hums with a stolen memory. One label reads \"Grandma's kitchen, 1987\". You resist the urge to plug it in."
+    },
+    {
+      "id": "gaze_spotlight",
+      "roomId": "collection",
+      "label": "Look at the spotlight",
+      "effects": {},
+      "narrative": "The beam is so bright it feels warm. Dust motes drift through it like tiny, slow comets."
+    }
+  ],
+  "endings": [
+    {
+      "id": "rooftop",
+      "title": "Rooftop Escape",
+      "text": "A drone taxi swoops past the dome and you leap aboard. Below, the museum's alarms fade into the neon haze. The city's memories are coming home."
+    },
+    {
+      "id": "service",
+      "title": "Tunnel Escape",
+      "text": "You crawl through the maintenance tunnels and surface three blocks away, unseen. The core hums quietly in your bag."
+    }
+  ],
+  "intendedSolutions": [
+    {
+      "routeId": "rooftop",
+      "endingId": "rooftop",
+      "steps": [
+        "search_desk",
+        "go_archive",
+        "inspect_terminal",
+        "go_collection",
+        "take_core",
+        "escape_rooftop"
+      ],
+      "objective": "Search the desk and read the note you find. Use the badge on the security door. At the archive terminal, enter the code from the note. Enter the vault, take the memory core, then climb to the rooftop. Verify the 'Rooftop Escape' ending is shown."
+    },
+    {
+      "routeId": "service",
+      "endingId": "service",
+      "steps": [
+        "search_desk",
+        "go_archive",
+        "take_fuse",
+        "inspect_terminal",
+        "go_collection",
+        "take_core",
+        "escape_service"
+      ],
+      "objective": "Search the desk and read the note you find. Use the badge on the security door. Take the fuse from the cabinet. At the archive terminal, enter the code from the note. Enter the vault, take the memory core, then power the service hatch. Verify the 'Tunnel Escape' ending is shown."
+    }
+  ]
+}
