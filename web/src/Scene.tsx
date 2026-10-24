@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { layoutHotspots, type PlacedHotspot } from "../../shared/hotspotLayout.ts";
 import type { ActionView, Hotspot, SessionView } from "../../shared/schema.ts";
 import { ITEM_DRAG_TYPE } from "./Inventory.tsx";
+import { Atmosphere } from "./Atmosphere.tsx";
 import { LOCK_TAG } from "./Mechanism.tsx";
+import type { Mood } from "./music.ts";
 
 type Item = SessionView["inventory"][number];
 
@@ -24,6 +26,8 @@ interface Props {
   onCancelUse: () => void;
   /** The last action's object glows on success and shakes on failure; `key` replays it. */
   pulse: { actionIds: string[]; ok: boolean; key: number; item?: { imageUrl: string | null; icon: string | null } } | null;
+  /** Mood for a living scene (camera drift and particles); null keeps the picture still, e.g. for Kane. */
+  atmosphere: Mood | null;
   /** Overlays drawn on top of the picture: transitions, keypad, ending, toasts. */
   children?: ReactNode;
 }
@@ -33,7 +37,7 @@ interface Props {
  * a small inspection panel beside it; with an item selected, clicking uses the item instead.
  * Objects are real buttons, so the room can be explored by keyboard too.
  */
-export function Scene({ url, alt, hotspots, actions, solved, disabled, showHints, selectedItem, onAction, onUse, onCancelUse, pulse, children }: Props) {
+export function Scene({ url, alt, hotspots, actions, solved, atmosphere, disabled, showHints, selectedItem, onAction, onUse, onCancelUse, pulse, children }: Props) {
   const [layers, setLayers] = useState<{ url: string; key: number }[]>([]);
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -107,6 +111,8 @@ export function Scene({ url, alt, hotspots, actions, solved, disabled, showHints
           <span className="spinner" aria-hidden /> Painting the scene…
         </div>
       )}
+      {/* The picture, spotlight and objects drift together, so hotspots stay on their objects. */}
+      <div className={`scene-stage ${atmosphere ? "" : "still"}`}>
       {layers.map((l, i) => (
         <img key={l.key} src={l.url} alt={i === layers.length - 1 ? alt : ""} className={i === layers.length - 1 ? "front" : "back"} />
       ))}
@@ -172,6 +178,9 @@ export function Scene({ url, alt, hotspots, actions, solved, disabled, showHints
           );
         })}
       </div>
+
+      </div>
+      {atmosphere && current && <Atmosphere mood={atmosphere} />}
 
       {selectedItem && pointer && (
         <div className="cursor-item" style={{ left: `${pointer.x * 100}%`, top: `${pointer.y * 100}%` }} aria-hidden>

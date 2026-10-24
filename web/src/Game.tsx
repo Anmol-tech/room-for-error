@@ -23,6 +23,8 @@ import { ModerationNotice } from "./ModerationNotice.tsx";
 
 const HOTBAR_SLOTS = 6;
 
+const reducedMotion = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 export function Game() {
   const { scenarioId = "" } = useParams();
   const [params, setParams] = useSearchParams();
@@ -387,6 +389,7 @@ export function Game() {
               hotspots={view.hotspots}
               actions={view.actions}
               solved={view.solved}
+              atmosphere={testMode || reducedMotion ? null : (moodRef.current?.mood ?? null)}
               disabled={busy || !!transition}
               showHints={hints}
               selectedItem={selectedItem}
