@@ -16,6 +16,7 @@ export const api = {
   library: () => call<LibraryEntry[]>("/api/library"),
   createAdventure: (theme: string) => call<AdventureSummary>("/api/adventures", { method: "POST", body: JSON.stringify({ theme }) }),
   adventure: (id: string) => call<AdventureSummary>(`/api/adventures/${encodeURIComponent(id)}`),
+  replantDemo: (id: string) => call<AdventureSummary>(`/api/adventures/${encodeURIComponent(id)}/replant`, { method: "POST" }),
   retryAdventure: (id: string) => call<AdventureSummary>(`/api/adventures/${encodeURIComponent(id)}/retry`, { method: "POST" }),
   director: (id: string) => call<DirectorView>(`/api/adventures/${encodeURIComponent(id)}/director`),
   createSession: (id: string) => call<SessionView>(`/api/adventures/${encodeURIComponent(id)}/sessions`, { method: "POST" }),

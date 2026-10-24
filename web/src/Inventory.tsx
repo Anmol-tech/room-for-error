@@ -3,6 +3,9 @@ import type { SessionView } from "../../shared/schema.ts";
 
 type Item = SessionView["inventory"][number];
 
+/** Drag data type for inventory items dropped on scene objects. */
+export const ITEM_DRAG_TYPE = "application/x-room-item";
+
 interface Props {
   items: Item[];
   /** Items picked up by the last action; they glow briefly. */
@@ -57,6 +60,12 @@ export function Inventory({ items, newItems, selected, onSelect, slots, notebook
               aria-pressed={selected === i.id}
               aria-label={`${i.name}. ${i.description}`}
               onClick={() => onSelect(selected === i.id ? null : i.id)}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(ITEM_DRAG_TYPE, i.id);
+                e.dataTransfer.effectAllowed = "move";
+                setPeek(null);
+              }}
               onMouseEnter={() => setPeek(i.id)}
               onMouseLeave={() => setPeek(null)}
               onFocus={() => setPeek(i.id)}

@@ -824,3 +824,47 @@ a.text-btn { text-decoration: none; }
 @media (hover: hover) and (pointer: fine) {
   .spots.using .spot-name { display: none; }
 }
+
+.route-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.replant-note { margin-top: 0.5rem; font-size: 0.8rem; color: var(--amber); }
+
+/* ---- Mechanisms: symbol wheels, switch panels, torn notes ---- */
+.mechanism { width: min(460px, 100%); }
+.wheels { display: flex; gap: 0.6rem; justify-content: center; margin: 0.6rem 0 0.2rem; flex-wrap: wrap; }
+.wheel { display: grid; justify-items: center; gap: 0.3rem; }
+.wheel button, .piece-moves button { width: 44px; height: 32px; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--ink); cursor: pointer; }
+.wheel button:hover:not(:disabled), .piece-moves button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+.wheel-face { min-width: 84px; padding: 0.7rem 0.5rem; text-align: center; border-radius: 12px; border: 1px solid var(--amber); background: linear-gradient(var(--panel-2), var(--panel)); font: 1.25rem var(--serif); text-transform: capitalize; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5); }
+.switch-panel { display: grid; gap: 0.5rem; margin: 0.6rem 0 0.2rem; }
+.panel-switch { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 0.7rem; padding: 0.55rem 0.8rem; border-radius: var(--r-ctl); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.panel-lever { width: 34px; height: 18px; border-radius: 999px; background: var(--line-2); position: relative; transition: background 0.15s; }
+.panel-lever::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.panel-switch.on { border-color: var(--amber); }
+.panel-switch.on .panel-lever { background: var(--amber-soft); }
+.panel-switch.on .panel-lever::after { transform: translateX(16px); background: var(--amber); }
+.panel-state { font: 600 0.72rem var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.panel-switch.on .panel-state { color: var(--amber); }
+.pieces { list-style: none; margin: 0.6rem 0 0.2rem; padding: 0; display: grid; gap: 0.45rem; counter-reset: piece; }
+.piece { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem 0.5rem 0.8rem; border-radius: 8px; background: #e9dfc8; color: #2b2418; transform: rotate(-0.4deg); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
+.piece:nth-child(even) { transform: rotate(0.5deg); }
+.piece-text { flex: 1; font: 1.05rem/1.3 var(--serif); text-align: left; }
+.piece-moves { display: flex; gap: 0.3rem; }
+.piece-moves button { width: 34px; height: 30px; background: rgba(0, 0, 0, 0.08); color: #2b2418; border-color: rgba(0, 0, 0, 0.2); }
+
+/* ---- Solved objects ---- */
+.spot.done .spot-mark { display: none; }
+.spots.hinted .spot.done { outline-color: rgba(147, 190, 160, 0.45); }
+.inspect-done { border-left: 2px solid var(--sage); padding-left: 0.6rem; margin: 0.4rem 0; }
+.inspect-done-label { font: 600 0.78rem var(--sans); color: var(--sage); }
+.inspect-done-text { font: 0.95rem/1.35 var(--serif); color: var(--muted); margin-top: 0.15rem; }
+
+/* ---- Drag and drop, placement ---- */
+.spot.drop { outline: 2px dashed var(--amber); outline-offset: -2px; }
+.place-item { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; pointer-events: none; animation: place 0.9s ease-in both; }
+.place-item img, .place-item > span { width: 100%; height: 100%; border-radius: 12px; border: 1px solid var(--amber); object-fit: cover; display: grid; place-items: center; font-size: 1.6rem; background: var(--panel); }
+@keyframes place {
+  0% { transform: translateY(40px) scale(1.25); opacity: 0; }
+  30% { transform: translateY(0) scale(1.1); opacity: 1; }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .place-item { animation: none; opacity: 0; } }

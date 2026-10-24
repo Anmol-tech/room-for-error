@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { layoutHotspots, type PlacedHotspot } from "../../shared/hotspotLayout.ts";
 import type { ActionView, Hotspot, SessionView } from "../../shared/schema.ts";
+import { ITEM_DRAG_TYPE } from "./Inventory.tsx";
+import { LOCK_TAG } from "./Mechanism.tsx";
 
 type Item = SessionView["inventory"][number];
 
@@ -9,17 +11,19 @@ interface Props {
   alt: string;
   hotspots: Hotspot[];
   actions: ActionView[];
+  /** Done one-time actions: their objects stay clickable to re-read what happened, marked solved. */
+  solved: SessionView["solved"];
   disabled: boolean;
   /** Hints on: amber markers and outlines. Off: only cursor feedback and a name on hover. */
   showHints: boolean;
   selectedItem: Item | null;
   onAction: (action: ActionView) => void;
-  /** Use the selected item on the object at this spot. */
-  onUse: (actionIds: string[]) => void;
+  /** Use an item (the selected one, or one dropped here) on the object at this spot. */
+  onUse: (actionIds: string[], itemId?: string) => void;
   /** Drops the selected item (right click or Escape over the scene). */
   onCancelUse: () => void;
   /** The last action's object glows on success and shakes on failure; `key` replays it. */
-  pulse: { actionIds: string[]; ok: boolean; key: number } | null;
+  pulse: { actionIds: string[]; ok: boolean; key: number; item?: { imageUrl: string | null; icon: string | null } } | null;
   /** Overlays drawn on top of the picture: transitions, keypad, ending, toasts. */
   children?: ReactNode;
 }
@@ -29,10 +33,11 @@ interface Props {
  * a small inspection panel beside it; with an item selected, clicking uses the item instead.
  * Objects are real buttons, so the room can be explored by keyboard too.
  */
-export function Scene({ url, alt, hotspots, actions, disabled, showHints, selectedItem, onAction, onUse, onCancelUse, pulse, children }: Props) {
+export function Scene({ url, alt, hotspots, actions, solved, disabled, showHints, selectedItem, onAction, onUse, onCancelUse, pulse, children }: Props) {
   const [layers, setLayers] = useState<{ url: string; key: number }[]>([]);
   const [inspecting, setInspecting] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // Where the selected item follows the pointer, as fractions of the canvas.
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
@@ -68,12 +73,13 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
   }, [inspecting]);
 
   const byId = new Map(actions.map((a) => [a.id, a]));
+  const doneById = new Map(solved.map((d) => [d.actionId, d]));
   const current = layers.at(-1)?.url;
   const spots = current === url ? layoutHotspots(hotspots) : [];
   const keyOf = (s: PlacedHotspot) => s.actionIds.join();
   const open = spots.find((s) => keyOf(s) === inspecting) ?? null;
-  // The spotlit object: the one under the pointer or keyboard focus, else the one being inspected.
-  const lit = spots.find((s) => keyOf(s) === hovered) ?? open;
+  // The spotlit object: a drop target, the one under the pointer or keyboard focus, else the one being inspected.
+  const lit = spots.find((s) => keyOf(s) === dropTarget) ?? spots.find((s) => keyOf(s) === hovered) ?? open;
 
   function pick(spot: PlacedHotspot) {
     if (selectedItem) onUse(spot.actionIds);
@@ -120,24 +126,44 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
       <div className={`spots ${showHints ? "hinted" : ""} ${selectedItem ? "using" : ""}`}>
         {spots.map((spot) => {
           const spotActions = spot.actionIds.map((id) => byId.get(id)).filter((a): a is ActionView => !!a);
-          if (!spotActions.length) return null;
-          const name = spot.object ?? spotActions[0].label;
-          const label = selectedItem ? `Use ${selectedItem.name} on ${name.toLowerCase()}` : name;
+          const spotDone = spot.actionIds.filter((id) => doneById.has(id));
+          if (!spotActions.length && !spotDone.length) return null;
+          const isDone = !spotActions.length;
+          const name = spot.object ?? spotActions[0]?.label ?? doneById.get(spotDone[0])!.label;
+          const label = selectedItem ? `Use ${selectedItem.name} on ${name.toLowerCase()}` : isDone ? `${name} (solved)` : name;
           const pulsed = pulse && spot.actionIds.some((id) => pulse.actionIds.includes(id));
           return (
             <button
               key={pulsed ? `${keyOf(spot)}#${pulse.key}` : keyOf(spot)}
               type="button"
-              className={`spot ${inspecting === keyOf(spot) ? "active" : ""} ${pulsed ? (pulse.ok ? "pulse-ok" : "pulse-fail") : ""}`}
+              className={`spot ${isDone ? "done" : ""} ${dropTarget === keyOf(spot) ? "drop" : ""} ${inspecting === keyOf(spot) ? "active" : ""} ${pulsed ? (pulse.ok ? "pulse-ok" : "pulse-fail") : ""}`}
               style={{ left: `${spot.x * 100}%`, top: `${spot.y * 100}%`, width: `${spot.w * 100}%`, height: `${spot.h * 100}%`, zIndex: 1 + spot.layer }}
               aria-label={label}
               disabled={disabled}
               onClick={() => pick(spot)}
+              onDragOver={(e) => {
+                if (!e.dataTransfer.types.includes(ITEM_DRAG_TYPE)) return;
+                e.preventDefault();
+                setDropTarget(keyOf(spot));
+              }}
+              onDragLeave={() => setDropTarget((d) => (d === keyOf(spot) ? null : d))}
+              onDrop={(e) => {
+                const itemId = e.dataTransfer.getData(ITEM_DRAG_TYPE);
+                setDropTarget(null);
+                if (!itemId) return;
+                e.preventDefault();
+                onUse(spot.actionIds, itemId);
+              }}
               onMouseEnter={() => setHovered(keyOf(spot))}
               onMouseLeave={() => setHovered((h) => (h === keyOf(spot) ? null : h))}
               onFocus={() => setHovered(keyOf(spot))}
               onBlur={() => setHovered((h) => (h === keyOf(spot) ? null : h))}
             >
+              {pulsed && pulse.ok && pulse.item && (
+                <span className="place-item" aria-hidden>
+                  {pulse.item.imageUrl ? <img src={pulse.item.imageUrl} alt="" /> : <span>{pulse.item.icon ?? "◆"}</span>}
+                </span>
+              )}
               {showHints && <span className="spot-mark" style={{ left: `${spot.markerX * 100}%`, top: `${spot.markerY * 100}%` }} aria-hidden />}
               <span className={`spot-name ${spot.y < 0.15 ? "below" : ""}`} style={{ left: `${spot.markerX * 100}%` }} aria-hidden>
                 {label}
@@ -161,6 +187,7 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
           ref={panelRef}
           spot={open}
           actions={open.actionIds.map((id) => byId.get(id)).filter((a): a is ActionView => !!a)}
+          done={open.actionIds.map((id) => doneById.get(id)).filter((d): d is SessionView["solved"][number] => !!d)}
           showHints={showHints}
           disabled={disabled}
           onAction={(a) => {
@@ -179,6 +206,7 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
 interface PanelProps {
   spot: PlacedHotspot;
   actions: ActionView[];
+  done: SessionView["solved"];
   showHints: boolean;
   disabled: boolean;
   onAction: (a: ActionView) => void;
@@ -187,12 +215,12 @@ interface PanelProps {
 }
 
 /** Small panel anchored beside the object, flipped and clamped to stay inside the canvas. */
-function InspectPanel({ spot, actions, showHints, disabled, onAction, onClose, ref }: PanelProps) {
+function InspectPanel({ spot, actions, done, showHints, disabled, onAction, onClose, ref }: PanelProps) {
   const mx = spot.x + spot.markerX * spot.w;
   const my = spot.y + spot.markerY * spot.h;
   const flip = mx > 0.55;
   const top = Math.min(Math.max(my - 0.12, 0.05), 0.5);
-  const title = spot.object ?? actions[0].label;
+  const title = spot.object ?? actions[0]?.label ?? done[0]?.label ?? "";
 
   return (
     <div
@@ -209,12 +237,18 @@ function InspectPanel({ spot, actions, showHints, disabled, onAction, onClose, r
         </button>
       </div>
       {spot.look && <p className="inspect-look">{spot.look}</p>}
+      {done.map((d) => (
+        <div key={d.actionId} className="inspect-done">
+          <p className="inspect-done-label">✓ {d.label}</p>
+          <p className="inspect-done-text">{d.narrative}</p>
+        </div>
+      ))}
       <div className="inspect-actions">
         {actions.map((a) => (
           <button key={a.id} type="button" data-action-id={a.id} disabled={disabled} onClick={() => onAction(a)}>
             <span>{a.label}</span>
             {showHints && a.locked && <span className="tag-lock">Locked</span>}
-            {a.inputPrompt && !a.locked && <span className="tag-code">Code</span>}
+            {a.inputPrompt && !a.locked && <span className="tag-code">{LOCK_TAG[a.inputKind ?? "code"]}</span>}
           </button>
         ))}
       </div>

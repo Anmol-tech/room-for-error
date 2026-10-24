@@ -123,3 +123,31 @@ test("wrong item uses explain what was observed", () => {
   const r = useItem(museum, archive, "badge", ["take_core"], "Memory core");
   assert.equal(r.ok, false);
 });
+
+test("mechanism locks: wheels, switches and torn notes check their answers", async () => {
+  const { lockProblem, lockView } = await import("./locks.ts");
+  const s = structuredClone(museum);
+  const lock = s.actions.find((a) => a.id === "inspect_terminal")!;
+  const state = play([["search_desk"], ["go_archive"]]).state;
+
+  lock.input = { kind: "symbols", prompt: "Turn the wheels", answer: "sun, leaf, moon", failMessage: "The wheels jam.", options: ["sun", "moon", "leaf", "water"] };
+  assert.equal(lockProblem(lock), null);
+  assert.deepEqual(lockView(lock), { inputKind: "symbols", inputOptions: ["sun", "moon", "leaf", "water"], inputSlots: 3 });
+  assert.equal(applyAction(s, state, lock.id, "moon,leaf,sun").ok, false);
+  assert.equal(applyAction(s, state, lock.id, "sun,leaf,moon").ok, true);
+
+  lock.input = { kind: "switches", prompt: "Set the panel", answer: "on,off,on", failMessage: "Sparks.", options: ["Pump", "Lamp", "Gate"] };
+  assert.equal(lockProblem(lock), null);
+  assert.equal(applyAction(s, state, lock.id, "on,off,on").ok, true);
+  lock.input.answer = "on,off";
+  assert.match(lockProblem(lock)!, /one on\/off per switch/);
+
+  lock.input = { kind: "order", prompt: "Assemble the note", answer: "The key | is under | the third stone", failMessage: "That reads wrong." };
+  assert.equal(lockProblem(lock), null);
+  const view = lockView(lock);
+  assert.notDeepEqual(view.inputOptions, ["The key", "is under", "the third stone"], "fragments arrive shuffled");
+  assert.equal(applyAction(s, state, lock.id, "The key | is under | the third stone").ok, true);
+
+  lock.input = { kind: "symbols", prompt: "x", answer: "sun,star", failMessage: "x", options: ["sun", "moon", "leaf"] };
+  assert.match(validateScenario(s).map((i) => i.message).join(), /symbol that isn't in options/);
+});

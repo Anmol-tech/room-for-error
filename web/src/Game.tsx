@@ -8,6 +8,7 @@ import { Ending } from "./Ending.tsx";
 import { Inventory } from "./Inventory.tsx";
 import { KaneWindow } from "./KaneWindow.tsx";
 import { Keypad } from "./Keypad.tsx";
+import { LOCK_TAG, Mechanism } from "./Mechanism.tsx";
 import { Narration } from "./Narration.tsx";
 import { HistorySheet, NotebookSheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
 import { Scene } from "./Scene.tsx";
@@ -48,7 +49,7 @@ export function Game() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [notebookOpen, setNotebookOpen] = useState(false);
   const [notebookNew, setNotebookNew] = useState(false);
-  const [pulse, setPulse] = useState<{ actionIds: string[]; ok: boolean; key: number } | null>(null);
+  const [pulse, setPulse] = useState<{ actionIds: string[]; ok: boolean; key: number; item?: { imageUrl: string | null; icon: string | null } } | null>(null);
   const [directorOpen, setDirectorOpen] = useState(() => params.get("director") === "1");
   const creating = useRef(false);
 
@@ -114,7 +115,7 @@ export function Game() {
             setOffline(false);
             setView((cur) =>
               cur && cur.stats.moves === v.stats.moves
-                ? { ...cur, imageUrl: v.imageUrl, hotspots: v.hotspots, sceneUpdating: v.sceneUpdating, inventory: v.inventory, notebook: v.notebook }
+                ? { ...cur, imageUrl: v.imageUrl, hotspots: v.hotspots, solved: v.solved, sceneUpdating: v.sceneUpdating, inventory: v.inventory, notebook: v.notebook }
                 : cur,
             );
           })
@@ -198,12 +199,14 @@ export function Game() {
   );
 
   const onUse = useCallback(
-    async (actionIds: string[]) => {
-      if (!view || !selected) return;
+    async (actionIds: string[], dropped?: string) => {
+      const itemId = dropped ?? selected;
+      if (!view || !itemId) return;
+      const item = view.inventory.find((i) => i.id === itemId);
       play("click");
       setBusy(true);
       try {
-        const next = await api.use(view.sessionId, selected, actionIds);
+        const next = await api.use(view.sessionId, itemId, actionIds);
         if (next.openInputFor) {
           const action = next.actions.find((a) => a.id === next.openInputFor);
           if (action) {
@@ -213,9 +216,10 @@ export function Game() {
           return;
         }
         land(view, next, false);
-        setPulse({ actionIds, ok: next.messageKind !== "error", key: Date.now() });
+        setPulse({ actionIds, ok: next.messageKind !== "error", key: Date.now(), item: item && { imageUrl: item.imageUrl, icon: item.icon } });
         // Keep the item selected after a miss so the player can try it somewhere else.
         if (next.messageKind !== "error") setSelected(null);
+        else if (dropped) setSelected(dropped);
       } catch {
         setOffline(true);
       } finally {
@@ -330,6 +334,7 @@ export function Game() {
               alt={`${view.roomName}. ${view.roomDescription}`}
               hotspots={view.hotspots}
               actions={view.actions}
+              solved={view.solved}
               disabled={busy || !!transition}
               showHints={hints}
               selectedItem={selectedItem}
@@ -377,7 +382,7 @@ export function Game() {
                       <kbd aria-hidden>{i + 1}</kbd>
                       {a.label}
                       {a.locked && <span className="tag-lock">Locked</span>}
-                      {a.inputPrompt && !a.locked && <span className="tag-code">Code</span>}
+                      {a.inputPrompt && !a.locked && <span className="tag-code">{LOCK_TAG[a.inputKind ?? "code"]}</span>}
                     </button>
                   ))}
                 </div>
@@ -400,7 +405,20 @@ export function Game() {
         </div>
       </main>
 
-      {codeAction && (
+      {codeAction && codeAction.inputKind && codeAction.inputKind !== "code" && (
+        <Mechanism
+          key={codeAction.id}
+          name={lockName}
+          action={codeAction}
+          onSubmit={(answer) => run(codeAction.id, answer)}
+          onClose={() => setCodeAction(null)}
+          busy={busy}
+          rejected={rejected}
+          status={view.messageKind === "error" ? view.message : null}
+          notes={view.notebook}
+        />
+      )}
+      {codeAction && (!codeAction.inputKind || codeAction.inputKind === "code") && (
         <Keypad
           name={lockName}
           prompt={codeAction.inputPrompt ?? "Enter the code"}

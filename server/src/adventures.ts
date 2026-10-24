@@ -21,6 +21,7 @@ import { db } from "./db.ts";
 import { createScenario } from "./director.ts";
 import { applyAction, initialState, meetsRequirements, nextStep, useItem, visibleActions, type UseResult } from "./engine.ts";
 import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario } from "./flux.ts";
+import { lockView } from "./locks.ts";
 import { isNote, noteSource, withNotes, withoutNotes } from "./notes.ts";
 import { endingOpen, playerKaneState, rehearse } from "./rehearsal.ts";
 import { validateScenario, validateShape } from "./validator.ts";
@@ -57,6 +58,7 @@ interface SessionRow {
 }
 
 export class NotFound extends Error {}
+export class Conflict extends Error {}
 
 const STAGE_KEYS: GenStageKey[] = ["writing", "checking", "painting", "placing", "entrance"];
 const LOG_LIMIT = 60;
@@ -265,6 +267,31 @@ export function seedPreparedMissions(): void {
   }
 }
 
+/**
+ * Puts a prepared mission's planted bug back for a live demo. The handcrafted file is saved as a
+ * NEW version on top (versions only go up), so Kane must catch the bug, the director must repair
+ * it, and Kane must pass again before the routes reopen. Earlier runs are kept as "Prior run".
+ */
+export function replantDemo(id: string): AdventureSummary {
+  const row = getAdventureRow(id);
+  if (!row.prepared) throw new Conflict("Only prepared missions have a planted bug to put back.");
+  if (db.prepare("SELECT 1 FROM kane_runs WHERE scenario_id = ? AND status IN ('queued', 'running')").get(id)) {
+    throw new Conflict("Wait for the current Kane run to finish.");
+  }
+  if (db.prepare("SELECT 1 FROM repairs WHERE scenario_id = ? AND status = 'repairing'").get(id)) throw new Conflict("A repair is still running.");
+  const file = readdirSync(MISSIONS_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => JSON.parse(readFileSync(path.join(MISSIONS_DIR, f), "utf8")))
+    .find((m) => m.id === id);
+  const shaped = file && validateShape(file);
+  if (!shaped || "issues" in shaped) throw new NotFound(`No mission file for ${id}`);
+  const scenario = { ...shaped.scenario, version: (row.current_version ?? 0) + 1 };
+  db.prepare("UPDATE kane_runs SET prior = 1 WHERE scenario_id = ?").run(id);
+  saveScenarioVersion(scenario, validateScenario(scenario));
+  void renderScenario(scenario); // same prompts as before, so the cached scenes are reused
+  return getAdventure(id);
+}
+
 /** Finishes or retries scene images for every stored adventure (finished images are skipped). */
 export function resumeRendering(): void {
   const rows = db.prepare("SELECT id, current_version FROM adventures WHERE current_version IS NOT NULL AND prepared = 0").all() as {
@@ -353,7 +380,8 @@ export function getSessionView(id: string): SessionView {
   const updating = !imageUrl(stateRow);
   const shown = updating ? imageRow(scenario, room.id, room.sceneStates[0].id) : stateRow;
   const actions = visibleActions(scenario, state);
-  const visibleIds = new Set(actions.map((a) => a.id));
+  const solved = scenario.actions.filter((a) => a.roomId === room.id && a.once && state.usedActions.includes(a.id));
+  const visibleIds = new Set([...actions, ...solved].map((a) => a.id));
   const found: string[] = JSON.parse(row.found);
 
   return {
@@ -374,12 +402,13 @@ export function getSessionView(id: string): SessionView {
       id: a.id,
       label: a.label,
       locked: !meetsRequirements(a, state),
-      ...(a.input ? { inputPrompt: a.input.prompt } : {}),
+      ...(a.input ? { inputPrompt: a.input.prompt, ...lockView(a) } : {}),
     })),
     inventory: state.inventory.filter((i) => !isNote(i)).map((i) => {
       const item = scenario.items.find((x) => x.id === i)!;
       return { id: item.id, name: item.name, description: item.description, icon: item.icon ?? null, imageUrl: itemIconUrl(scenario, item) };
     }),
+    solved: solved.map((a) => ({ actionId: a.id, label: a.label, narrative: a.narrative })),
     notebook: state.inventory.filter(isNote).map((id) => {
       const item = scenario.items.find((x) => x.id === id)!;
       const source = noteSource(scenario, id);
@@ -494,7 +523,10 @@ export function hint(sessionId: string): HintResult {
     return { level, text: target ? `Take a closer look at ${target}.` : `Look around the ${room.name.toLowerCase()} more carefully.` };
   }
   if (level === 2) {
-    if (step.input) return { level, text: `A code is involved. Something you've already read may hold it.` };
+    if (step.input) {
+      const what = { code: "A code is involved", symbols: "The symbols have an order", switches: "The switches need the right pattern", order: "The pieces fit together one way" }[step.input.kind];
+      return { level, text: `${what}. Something you've already read may hold it.` };
+    }
     if (items.length) return { level, text: `Your ${items.join(" and ")} might be useful${target ? ` at ${target}` : " here"}.` };
     if (step.effects.moveTo) return { level, text: `The way forward is through ${target ?? "an exit in this room"}.` };
     return { level, text: target ? `Try interacting with ${target}.` : "Try interacting with something you haven't touched yet." };

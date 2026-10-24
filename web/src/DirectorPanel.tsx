@@ -82,6 +82,7 @@ export function DirectorPanel({ adventureId, sessionVersion, onClose }: Props) {
   const [openEvent, setOpenEvent] = useState<number | null>(null);
   const [openRun, setOpenRun] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [replantNote, setReplantNote] = useState<string | null>(null);
   useEscape(onClose);
 
   useEffect(() => {
@@ -97,6 +98,20 @@ export function DirectorPanel({ adventureId, sessionVersion, onClose }: Props) {
       clearInterval(t);
     };
   }, [adventureId]);
+
+  async function replant() {
+    setStarting(true);
+    setReplantNote(null);
+    try {
+      const a = await api.replantDemo(adventureId);
+      setReplantNote(`Bug planted again as v${a.version}. Run Kane to watch it get caught and repaired.`);
+      setKane(await api.kane(adventureId));
+    } catch (err) {
+      setReplantNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
 
   async function runChecks() {
     setStarting(true);
@@ -197,9 +212,27 @@ export function DirectorPanel({ adventureId, sessionVersion, onClose }: Props) {
             </li>
           ))}
         </ul>
-        <button type="button" className="btn-ghost" onClick={runChecks} disabled={starting || busy || !kane?.enabled}>
-          {busy ? "Kane is running…" : starting ? "Starting…" : "Run Kane on every route"}
-        </button>
+        <div className="route-buttons">
+          <button type="button" className="btn-ghost" onClick={runChecks} disabled={starting || busy || !kane?.enabled}>
+            {busy ? "Kane is running…" : starting ? "Starting…" : "Run Kane on every route"}
+          </button>
+          {data?.adventure.prepared && (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={replant}
+              disabled={starting || busy}
+              title="Saves the handcrafted mission, with its planted clue bug, as a new version"
+            >
+              Replant the demo bug
+            </button>
+          )}
+        </div>
+        {replantNote && (
+          <p className="replant-note" role="status">
+            {replantNote}
+          </p>
+        )}
         {spoilers && data && (
           <details className="objectives">
             <summary>Route objectives Kane follows</summary>

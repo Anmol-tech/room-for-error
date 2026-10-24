@@ -1,3 +1,4 @@
+import { lockProblem } from "./locks.ts";
 // Static checks that run before anything is shown to a player or to Kane.
 // They catch rule errors only; prose (like a clue's wording) is Kane's job.
 import { ScenarioSchema, type GameState, type Scenario, type ValidatorIssue } from "../../shared/schema.ts";
@@ -20,6 +21,7 @@ export function validateShape(data: unknown): { scenario: Scenario } | { issues:
 export function validateScenario(scenario: Scenario): ValidatorIssue[] {
   const issues = [...checkReferences(scenario)];
   if (issues.length) return issues; // graph checks are meaningless with dangling references
+  issues.push(...checkLocks(scenario));
   issues.push(...checkSolutions(scenario));
   issues.push(...checkReachableEndings(scenario));
   return issues;
@@ -134,4 +136,12 @@ function checkReachableEndings(s: Scenario): ValidatorIssue[] {
 
 function stateKey(st: GameState): string {
   return JSON.stringify([st.roomId, [...st.inventory].sort(), [...st.flags].sort(), [...st.usedActions].sort(), st.endingId ?? ""]);
+}
+
+/** Mechanism locks must be well formed: matching wheels and symbols, one setting per switch, real fragments. */
+function checkLocks(s: Scenario): ValidatorIssue[] {
+  return s.actions.flatMap((a) => {
+    const problem = lockProblem(a);
+    return problem ? [{ kind: "invalid_shape" as const, message: `Lock "${a.id}" (${a.input!.kind}) ${problem}`, refs: [a.id] }] : [];
+  });
 }

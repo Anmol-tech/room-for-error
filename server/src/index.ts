@@ -9,6 +9,8 @@ import { listLibrary,
   hint,
   listAdventures,
   NotFound,
+  Conflict,
+  replantDemo,
   resetInterruptedBuilds,
   resumeRendering,
   retryAdventure,
@@ -50,6 +52,11 @@ app.get("/api/library", (_req, res) => {
 
 app.get("/api/adventures/:id", (req, res) => {
   res.json(getAdventure(req.params.id));
+});
+
+/** Puts a prepared mission's planted bug back as a new version, for a live Kane catch and repair. */
+app.post("/api/adventures/:id/replant", (req, res) => {
+  res.json(replantDemo(req.params.id));
 });
 
 /** Builds a failed adventure again from its theme, at the same address. */
@@ -132,6 +139,7 @@ app.get("/api/preview/:runId", (req, res) => {
 
 const onError: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof NotFound) res.status(404).json({ error: err.message });
+  else if (err instanceof Conflict) res.status(409).json({ error: err.message });
   else if (err instanceof z.ZodError) res.status(400).json({ error: err.issues.map((i) => i.message).join("; ") });
   else {
     console.error(err);

@@ -22,8 +22,20 @@ function hasCodeLike(text: string, length: number): boolean {
 
 /** The action whose text reveals the code for `lock`: it states the answer, or failing that a code of the same length. */
 function clueAction(scenario: Scenario, lock: Action): Action | undefined {
-  const code = compact(lock.input!.answer);
+  const input = lock.input!;
   const others = scenario.actions.filter((a) => a !== lock && !a.input);
+  // Torn notes are their own clue; "on"/"off" appear in almost any text, so switch clues aren't guessed.
+  if (input.kind === "order" || input.kind === "switches") return undefined;
+  if (input.kind !== "code") {
+    // A symbol or switch clue names every part of the answer, in order.
+    const parts = input.answer.split(",").map((p) => p.trim().toLowerCase());
+    return others.find((a) => {
+      const text = a.narrative.toLowerCase();
+      let at = 0;
+      return parts.every((p) => (at = text.indexOf(p, at)) >= 0 && (at += p.length) > 0);
+    });
+  }
+  const code = compact(input.answer);
   return (
     others.find((a) => compact(a.narrative).includes(code)) ??
     (/^\d+$/.test(code) ? others.find((a) => hasCodeLike(a.narrative, code.length)) : undefined)
@@ -52,7 +64,7 @@ export function withNotes(scenario: Scenario): Scenario {
     items.push({
       id,
       name: many ? `Note ${i + 1}` : "Note",
-      description: clueText(source.narrative, compact(lock.input!.answer)),
+      description: lock.input!.kind === "code" ? clueText(source.narrative, compact(lock.input!.answer)) : source.narrative,
       consumable: false,
       icon: "📝",
     });

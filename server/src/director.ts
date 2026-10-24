@@ -19,7 +19,12 @@ const RULES = `You design short escape-room adventures as JSON for a fixed game 
 
 Return ONE JSON object with exactly the shape of the example. Rules:
 - 3 rooms, 3–4 items, 2 puzzles, 2 endings (two different escape routes). Gameplay of 2–4 minutes.
-- At least one puzzle is a code lock: an action with "input": {"kind":"code", ...}. Its clue must appear, word for word, in the "narrative" of an EARLIER action the player can take, and the clue's code must equal "input.answer" exactly.
+- Both puzzles are locks: actions with "input" ({"kind", "prompt", "answer", "failMessage"} plus "options" where noted). Make ONE a code lock and the OTHER whichever mechanism suits the theme best:
+  - "code": the player types a code. "answer": a code you invent for this story (never 4417, the example's code).
+  - "symbols": a lock of 2–4 wheels. "options": the 3–6 symbols every wheel cycles through (single plain words: "sun", "leaf"). "answer": one symbol per wheel, comma-separated: "sun,leaf,moon".
+  - "switches": a panel of 2–5 labeled switches. "options": the switch labels in panel order ("Pump", "Lamp"). "answer": "on" or "off" per switch, comma-separated, same order: "on,off,on".
+  - "order": a torn note in 3–5 pieces the player puts in order. No "options". "answer": the pieces in the right order joined by " | ": "The key | lies under | the third stone". The finished sentence must make sense and matter to the story.
+  For code, symbols and switches, the clue must appear in the "narrative" of an EARLIER action the player can take and must match "answer" exactly (same code, same symbols in the same order, same switches on). The clue never sits on the lock itself.
 - Every action needs a short, unique (within its room) button "label" in plain words, a "narrative" shown after success, and a "lockedMessage" if it has "requires".
 - Use "once": true for one-time actions (searching, taking items, solving puzzles).
 - Also give every room 1–2 "flavor" actions that are NOT part of any solution: examining a distinct object that appears in that room's first imagePrompt (a painting, a window, a strange machine). They have empty "effects" ({}), no "requires", no "once", and a short atmospheric or funny "narrative". Never put them in "intendedSolutions". Never use an object another action already uses, and never doors, hatches, ladders, windows, locks or keypads.
@@ -27,7 +32,7 @@ Return ONE JSON object with exactly the shape of the example. Rules:
 - Use "requires" (items/flags) and "effects" (addItems, removeItems, setFlags, moveTo, sceneState, ending) only. Only remove items that are truly used up.
 - Each room has 1–3 "sceneStates". The first is the default; add one only for a visible change (door opens, object taken, lights change). imagePrompt: a vivid visual description of the scene with no words or text in the image; later states describe only what changed. The first imagePrompt must name every object the room's actions use, so each can be seen and clicked (the helm for "Search the helm", the door or hatch for every exit).
 - ids are short snake_case and unique. Every item has an "icon": one emoji that fits it.
-- "intendedSolutions": one per ending, listing every action id in order from the very start, including each move between rooms. Play each route through in your head before answering: every step must be available in the room the player is in at that moment. "objective" is a plain-English instruction for a tester who only sees the screen: say which buttons to use, to read any clue and use it (never state the code itself), and end with: Verify the '<ending title>' ending is shown.
+- "intendedSolutions": one per ending, listing every action id in order from the very start, including each move between rooms. Play each route through in your head before answering: every step must be available in the room the player is in at that moment. "objective" is a plain-English instruction for a tester who only sees the screen: say which buttons to use, to read any clue and use it (never state the code, symbols, switch settings or note order themselves; e.g. "turn the wheels to match the carving", "set the switches as the diagram shows", "move the torn pieces until the note reads correctly, then submit"), and end with: Verify the '<ending title>' ending is shown.
 - Keep all text short. Match the theme closely; the theme must genuinely shape rooms, items, puzzles and endings.
 
 Example (a different theme):
