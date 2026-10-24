@@ -34,7 +34,7 @@ const PROVIDERS = {
     provider: "openai",
     apiKey: process.env.OPENAI_API_KEY || "",
     baseURL: undefined,
-    model: process.env.OPENAI_MODEL || "gpt-6-luna",
+    model: process.env.OPENAI_MODEL || "gpt-6.1-sol",
   },
   openrouter: {
     provider: "openrouter",
@@ -51,8 +51,21 @@ if (requested && !(requested in PROVIDERS)) {
 export const LLM =
   PROVIDERS[(requested as keyof typeof PROVIDERS | undefined) ?? (PROVIDERS.openai.apiKey ? "openai" : "openrouter")];
 
-/** Vision model that finds clickable objects in scene images. Must accept images. */
-export const VISION_MODEL = process.env.VISION_MODEL || (LLM.provider === "openrouter" ? "google/gemma-4-26b-a4b-it" : "gpt-5.4-mini");
+/**
+ * Vision model that finds clickable objects in scene images; VISION_PROVIDER can send it elsewhere
+ * than the director. Compared on three scenes: gpt-6.1-sol (high image detail, medium reasoning)
+ * and google/gemini-3.8-flash put boxes on the objects; gpt-5.4-mini was visibly off.
+ */
+const visionRequested = process.env.VISION_PROVIDER?.trim().toLowerCase();
+if (visionRequested && !(visionRequested in PROVIDERS)) {
+  throw new Error(`VISION_PROVIDER must be "openai" or "openrouter", got "${visionRequested}"`);
+}
+const visionProvider = PROVIDERS[(visionRequested as keyof typeof PROVIDERS | undefined) ?? LLM.provider];
+export const VISION = {
+  ...visionProvider,
+  model: process.env.VISION_MODEL || (visionProvider.provider === "openrouter" ? "google/gemini-3.8-flash" : "gpt-6.1-sol"),
+};
+export const VISION_MODEL = VISION.model;
 
 /**
  * Reasoning effort for models that support it ("none", "low", "medium", "high"). Lower is faster:

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Hotspot, ImageStatus, Item, Room, Scenario } from "../../shared/schema.ts";
-import { ASSETS_DIR, BFL_API_KEY, BFL_MODEL, IMAGE_CONCURRENCY, IMAGE_HEIGHT, IMAGE_WIDTH } from "./config.ts";
+import { ASSETS_DIR, BFL_API_KEY, BFL_MODEL, IMAGE_CONCURRENCY, IMAGE_HEIGHT, IMAGE_WIDTH, VISION_MODEL } from "./config.ts";
 import { db } from "./db.ts";
 import { detectHotspots, hotspotsEnabled } from "./hotspots.ts";
 
@@ -37,8 +37,9 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0
 
 /** Changes whenever a room gains, loses or relabels actions, so hotspots get re-detected. */
 function hotspotSignature(scenario: Scenario, room: Room): string {
-  // "v2": detection also returns object names and descriptions.
-  return hash("v2" + JSON.stringify(scenario.actions.filter((a) => a.roomId === room.id).map((a) => [a.id, a.label])));
+  // "v2": detection also returns object names and descriptions. The model is part of it, so
+  // switching vision models re-detects old scenes the next time they're shown.
+  return hash("v2" + VISION_MODEL + JSON.stringify(scenario.actions.filter((a) => a.roomId === room.id).map((a) => [a.id, a.label])));
 }
 
 export function imageRow(scenario: Scenario, roomId: string, sceneStateId: string): ImageRow | undefined {

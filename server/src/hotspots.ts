@@ -2,10 +2,9 @@
 // Buttons stay the source of truth; hotspots are a shortcut layered on top.
 import { readFileSync } from "node:fs";
 import type { Hotspot, Room, Scenario } from "../../shared/schema.ts";
-import { VISION_MODEL } from "./config.ts";
-import { chatJson, llmEnabled } from "./llm.ts";
+import { chatJson, visionEnabled } from "./llm.ts";
 
-export const hotspotsEnabled = llmEnabled;
+export const hotspotsEnabled = visionEnabled;
 
 const SYSTEM = `You locate objects in illustrations for a point-and-click escape game.
 For each target, find the single object or area in the image a player would click to do that action
@@ -27,10 +26,11 @@ export async function detectHotspots(scenario: Scenario, room: Room, imagePath: 
     SYSTEM,
     [
       { type: "text", text: `Room: ${room.name}. ${room.description}\nTargets:\n${JSON.stringify(targets)}` },
-      { type: "image_url", image_url: { url: image } },
+      // Full detail: at the default the model sees a downscaled image and its boxes drift.
+      { type: "image_url", image_url: { url: image, detail: "high" } },
     ],
-    // Some vision models (e.g. Gemini) refuse to run with reasoning fully off.
-    { model: VISION_MODEL, tag: "hotspots", reasoningEffort: "low" },
+    // "medium": at "low" boxes landed beside their objects. Some models also refuse reasoning fully off.
+    { vision: true, tag: "hotspots", reasoningEffort: "medium" },
   );
 
   const ids = new Set(actions.map((a) => a.id));

@@ -1,17 +1,20 @@
 // Shared chat client for the director (text) and hotspot detection (vision).
 import OpenAI from "openai";
-import { LLM, LLM_REASONING_EFFORT } from "./config.ts";
+import { LLM, LLM_REASONING_EFFORT, VISION } from "./config.ts";
 
 // OpenRouter speaks the OpenAI API, so the same client works for both.
-const client = LLM.apiKey
-  ? new OpenAI({
-      apiKey: LLM.apiKey,
-      baseURL: LLM.baseURL,
-      ...(LLM.provider === "openrouter" ? { defaultHeaders: { "X-Title": "Room for Error" } } : {}),
-    })
-  : null;
+const makeClient = (p: { apiKey: string; baseURL: string | undefined; provider: string }) =>
+  p.apiKey
+    ? new OpenAI({
+        apiKey: p.apiKey,
+        baseURL: p.baseURL,
+        ...(p.provider === "openrouter" ? { defaultHeaders: { "X-Title": "Room for Error" } } : {}),
+      })
+    : null;
+const clients = { text: { client: makeClient(LLM), provider: LLM.provider }, vision: { client: makeClient(VISION), provider: VISION.provider } };
 
-export const llmEnabled = () => client !== null;
+export const llmEnabled = () => clients.text.client !== null;
+export const visionEnabled = () => clients.vision.client !== null;
 
 export type UserContent = string | OpenAI.ChatCompletionContentPart[];
 
@@ -19,10 +22,11 @@ export type UserContent = string | OpenAI.ChatCompletionContentPart[];
 export async function chatJson(
   system: string,
   user: UserContent,
-  opts: { model?: string; tag: string; reasoningEffort?: string },
+  opts: { vision?: boolean; tag: string; reasoningEffort?: string },
 ): Promise<Record<string, unknown>> {
+  const { client, provider } = opts.vision ? clients.vision : clients.text;
   if (!client) throw new Error("No LLM key set (OPENROUTER_API_KEY or OPENAI_API_KEY)");
-  const model = opts.model ?? LLM.model;
+  const model = opts.vision ? VISION.model : LLM.model;
   const effort = opts.reasoningEffort ?? LLM_REASONING_EFFORT;
   const started = Date.now();
   const params = {
@@ -33,14 +37,14 @@ export async function chatJson(
       { role: "user" as const, content: user },
     ],
     // OpenRouter normalizes reasoning settings across models; OpenAI takes reasoning_effort.
-    ...(LLM.provider === "openrouter"
+    ...(provider === "openrouter"
       ? { reasoning: { effort } }
       : { reasoning_effort: effort }),
   };
   const res = await client.chat.completions.create(params as OpenAI.ChatCompletionCreateParamsNonStreaming);
   const text = res.choices[0]?.message?.content;
   console.log(
-    `[${opts.tag}] ${LLM.provider}/${model} ${((Date.now() - started) / 1000).toFixed(1)}s, ${res.usage?.completion_tokens ?? "?"} output tokens`,
+    `[${opts.tag}] ${provider}/${model} ${((Date.now() - started) / 1000).toFixed(1)}s, ${res.usage?.completion_tokens ?? "?"} output tokens`,
   );
   if (!text) throw new Error(`${opts.tag}: empty response`);
   // Some models wrap JSON in prose or code fences; take the outermost object.
