@@ -365,6 +365,16 @@ export interface AdventureSummary {
   stages: GenStage[];
 }
 
+/** A saved room in the library: its summary plus what players and Kane have done with it. */
+export interface LibraryEntry extends AdventureSummary {
+  createdAt: string;
+  rooms: string[];
+  /** Player sessions that made at least one move, and how many of them escaped. */
+  plays: number;
+  escapes: number;
+  kane: "testing" | "repairing" | "passed" | "delayed" | null;
+}
+
 export interface DirectorView {
   adventure: AdventureSummary;
   validatorIssues: ValidatorIssue[];
