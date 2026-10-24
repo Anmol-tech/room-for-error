@@ -313,6 +313,8 @@ export interface SessionView {
   sessionId: Id;
   scenarioId: Id;
   scenarioVersion: number;
+  /** The theme the player typed; picks the room's music. */
+  theme: string;
   title: string;
   roomId: Id;
   roomName: string;
