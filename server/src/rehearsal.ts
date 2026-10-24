@@ -3,7 +3,7 @@
 // Kane plays again. A route counts as ready only after a pass on the exact version being played.
 import { randomUUID } from "node:crypto";
 import type { KaneRun, KaneStep, KaneView, Repair, RouteReadiness, Scenario } from "../../shared/schema.ts";
-import { getAdventureVersion, getScenario, newPreviewSession, saveScenarioVersion, sessionEnding } from "./adventures.ts";
+import { assertAdventureAvailable, getAdventureVersion, getScenario, newPreviewSession, saveScenarioVersion, sessionEnding } from "./adventures.ts";
 import { KANE_APP_URL, KANE_CONCURRENCY, KANE_MAX_REPAIRS } from "./config.ts";
 import { db } from "./db.ts";
 import { reviseScenario } from "./director.ts";
@@ -11,6 +11,8 @@ import { renderScenario } from "./flux.ts";
 import { kaneReady, runKane } from "./kane.ts";
 import { exploringNow, onBrowserFree, routeRunEnded, routeRunStarted } from "./kaneLock.ts";
 import { validateScenario, validateShape } from "./validator.ts";
+import { onImageModeration } from "./imageModeration.ts";
+import { IMAGE_MODERATION_MESSAGE } from "../../shared/imageModeration.ts";
 
 interface RunRow {
   id: string;
@@ -117,6 +119,19 @@ export function resetInterruptedRuns(): void {
 
 const queue: string[] = [];
 let running = 0;
+const activeRuns = new Map<string, AbortController>();
+
+onImageModeration(({ scenarioId, version }) => {
+  const blocked = db.prepare("SELECT id FROM kane_runs WHERE scenario_id = ? AND version = ? AND status IN ('queued', 'running')")
+    .all(scenarioId, version) as { id: string }[];
+  db.prepare("UPDATE kane_runs SET status = 'cancelled', reason = ?, finished_at = ? WHERE scenario_id = ? AND version = ? AND status IN ('queued', 'running')")
+    .run(IMAGE_MODERATION_MESSAGE, now(), scenarioId, version);
+  for (const run of blocked) {
+    const position = queue.indexOf(run.id);
+    if (position >= 0) queue.splice(position, 1);
+    activeRuns.get(run.id)?.abort();
+  }
+});
 
 function pump() {
   // A free exploration holds the browser; route runs wait their turn (see kaneLock.ts).
@@ -157,6 +172,7 @@ function enqueue(scenario: Scenario, routeId: string): string {
 
 /** Rehearses every route of the adventure's current version, skipping routes already queued or running. */
 export function rehearse(scenarioId: string): string[] {
+  assertAdventureAvailable(scenarioId);
   const scenario = getScenario(scenarioId, getAdventureVersion(scenarioId));
   const busy = db
     .prepare("SELECT route_id FROM kane_runs WHERE scenario_id = ? AND version = ? AND status IN ('queued', 'running')")
@@ -166,20 +182,35 @@ export function rehearse(scenarioId: string): string[] {
 
 async function execute(runId: string): Promise<void> {
   const row = db.prepare("SELECT * FROM kane_runs WHERE id = ?").get(runId) as RunRow;
+  if (row.status !== "queued") return;
+  try {
+    assertAdventureAvailable(row.scenario_id);
+  } catch (err) {
+    db.prepare("UPDATE kane_runs SET status = 'cancelled', reason = ?, finished_at = ? WHERE id = ?")
+      .run(err instanceof Error ? err.message : String(err), now(), runId);
+    return;
+  }
+  const controller = new AbortController();
+  activeRuns.set(runId, controller);
   db.prepare("UPDATE kane_runs SET status = 'running', started_at = ? WHERE id = ?").run(now(), runId);
   const result = await runKane({
     runId,
     url: `${KANE_APP_URL}/preview/${runId}`,
     objective: row.objective,
     onStep: (steps: KaneStep[]) => db.prepare("UPDATE kane_runs SET steps = ? WHERE id = ?").run(JSON.stringify(steps), runId),
+    signal: controller.signal,
   });
+  activeRuns.delete(runId);
   // A pass must reach this route's ending in the test session. Reaching a different, valid
   // ending means Kane took another exit: the game is fine, so replay instead of repairing.
   const scenario = getScenario(row.scenario_id, row.version);
   const reached = sessionEnding(row.session_id);
   let status: KaneRun["status"] = result.outcome;
   let reason = result.reason;
-  if (result.outcome !== "infra_error" && reached !== row.ending_id && (reached || result.outcome === "passed")) {
+  if (controller.signal.aborted) {
+    status = "cancelled";
+    reason = IMAGE_MODERATION_MESSAGE;
+  } else if (result.outcome !== "infra_error" && reached !== row.ending_id && (reached || result.outcome === "passed")) {
     const title = (id: string | null) => scenario.endings.find((e) => e.id === id)?.title ?? "no ending";
     status = "off_route";
     reason = reached
@@ -263,6 +294,7 @@ async function repair(run: KaneRun): Promise<void> {
 
   try {
     const revised = await reviseScenario(scenario, evidence.map((message) => ({ message })), { lockObjectives: true, effort: "low" });
+    assertAdventureAvailable(scenario.id);
     const shaped = validateShape({ ...revised, version: scenario.version + 1 });
     if ("issues" in shaped) throw new Error(shaped.issues.map((i) => i.message).join("; "));
     const issues = validateScenario(shaped.scenario);

@@ -17,6 +17,8 @@ import { updateSettings, useSettings } from "./settings.ts";
 import { play } from "./sound.ts";
 import { SoundOffIcon, SoundOnIcon } from "./Start.tsx";
 import { useSound } from "./useSound.ts";
+import { isImageModeration } from "../../shared/imageModeration.ts";
+import { ModerationNotice } from "./ModerationNotice.tsx";
 
 const HOTBAR_SLOTS = 6;
 
@@ -34,6 +36,7 @@ export function Game() {
 
   const [view, setView] = useState<SessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moderated, setModerated] = useState(false);
   const [offline, setOffline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [beat, setBeat] = useState(0);
@@ -53,6 +56,18 @@ export function Game() {
   const [pulse, setPulse] = useState<{ actionIds: string[]; ok: boolean; key: number; item?: { imageUrl: string | null; icon: string | null } } | null>(null);
   const [directorOpen, setDirectorOpen] = useState(() => params.get("director") === "1");
   const creating = useRef(false);
+
+  // Later rooms render in the background. A provider rejection ends this adventure for players too.
+  useEffect(() => {
+    if (moderated) return;
+    let stopped = false;
+    const check = () => api.adventure(scenarioId).then((a) => {
+      if (!stopped && isImageModeration(a.error)) setModerated(true);
+    }).catch(() => {});
+    void check();
+    const timer = setInterval(check, 3000);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [scenarioId, moderated]);
 
   // In test mode the address names the room (or ending) the game is in: Kane's explorer tells screens
   // apart by address, and every room otherwise shares one, so it would never see past the first.
@@ -107,7 +122,7 @@ export function Game() {
 
   // Pick up scene images and object detection that finish after the room appears; notice lost connections.
   useEffect(() => {
-    if (!view || view.ending) return;
+    if (!view || view.ending || moderated) return;
     const t = setInterval(
       () =>
         api
@@ -120,11 +135,14 @@ export function Game() {
                 : cur,
             );
           })
-          .catch(() => setOffline(true)),
+          .catch((err) => {
+            if (isImageModeration(err instanceof Error ? err.message : String(err))) setModerated(true);
+            else setOffline(true);
+          }),
       3000,
     );
     return () => clearInterval(t);
-  }, [view?.sessionId, view?.ending]);
+  }, [view?.sessionId, view?.ending, moderated]);
 
   useEffect(() => {
     if (!toast) return;
@@ -273,6 +291,8 @@ export function Game() {
     setCodeAction(null);
     setParams({}, { replace: false });
   }
+
+  if (moderated || isImageModeration(error)) return <ModerationNotice />;
 
   if (error && !view) {
     return (

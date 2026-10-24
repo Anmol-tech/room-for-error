@@ -6,7 +6,9 @@ import { createWriteStream } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { ExplorationStatus, ExplorationView, ExploreCoverage, GameState, LogEntry, Scenario } from "../../shared/schema.ts";
-import { getAdventureVersion, getScenario, newPreviewSession } from "./adventures.ts";
+import { assertAdventureAvailable, getAdventureVersion, getScenario, newPreviewSession } from "./adventures.ts";
+import { onImageModeration } from "./imageModeration.ts";
+import { IMAGE_MODERATION_MESSAGE, isImageModeration } from "../../shared/imageModeration.ts";
 import { KANE_APP_URL, KANE_HEADLESS } from "./config.ts";
 import { db } from "./db.ts";
 import { RUNS_DIR } from "./kane.ts";
@@ -65,6 +67,7 @@ interface Row {
 const now = () => new Date().toISOString();
 const kaneEnv = () => ({ ...process.env, KANE_CLI_USER_AGENT: "room-for-error" });
 let active: { id: string; child: ChildProcess } | null = null;
+const moderationStops = new Set<string>();
 
 /** Explorations cut off by a server restart can't finish; record that honestly. */
 export function resetInterruptedExplorations(): void {
@@ -73,6 +76,7 @@ export function resetInterruptedExplorations(): void {
 
 /** Queues a free exploration of the adventure's current version (one at a time per adventure). */
 export function explore(scenarioId: string): string {
+  assertAdventureAvailable(scenarioId);
   const busy = db.prepare("SELECT id FROM explorations WHERE scenario_id = ? AND status IN ('queued', 'running')").get(scenarioId) as { id: string } | undefined;
   if (busy) return busy.id;
   const id = randomUUID();
@@ -93,14 +97,29 @@ export function stopExploration(scenarioId: string): void {
 }
 
 onBrowserFree(startNext);
+onImageModeration(({ scenarioId }) => {
+  const row = db.prepare("SELECT id FROM explorations WHERE scenario_id = ? AND status IN ('queued', 'running')")
+    .get(scenarioId) as { id: string } | undefined;
+  if (row) moderationStops.add(row.id);
+  stopExploration(scenarioId);
+});
 
 function startNext(): void {
   if (active || browserBusy()) return;
   const row = db.prepare("SELECT * FROM explorations WHERE status = 'queued' ORDER BY created_at LIMIT 1").get() as Row | undefined;
   if (!row) return;
+  try {
+    assertAdventureAvailable(row.scenario_id);
+  } catch (err) {
+    db.prepare("UPDATE explorations SET status = 'stopped', remark = ?, finished_at = ? WHERE id = ?")
+      .run(err instanceof Error ? err.message : String(err), now(), row.id);
+    startNext();
+    return;
+  }
   exploreStarted();
   db.prepare("UPDATE explorations SET status = 'running', started_at = ? WHERE id = ?").run(now(), row.id);
   void run(row).finally(() => {
+    moderationStops.delete(row.id);
     active = null;
     exploreEnded();
     startNext();
@@ -119,8 +138,10 @@ async function run(row: Row): Promise<void> {
   let project: string;
   try {
     project = await projectFor(scenario);
+    assertAdventureAvailable(row.scenario_id);
   } catch (err) {
-    finish(row.id, "failed", `Couldn't set up a Kane project: ${err instanceof Error ? err.message : err}`, null);
+    const message = err instanceof Error ? err.message : String(err);
+    finish(row.id, isImageModeration(message) ? "stopped" : "failed", isImageModeration(message) ? IMAGE_MODERATION_MESSAGE : `Couldn't set up a Kane project: ${message}`, null);
     return;
   }
 
@@ -175,6 +196,11 @@ async function run(row: Row): Promise<void> {
     });
     child.on("close", (code) => {
       evidence.end();
+      if (moderationStops.has(row.id)) {
+        finish(row.id, "stopped", IMAGE_MODERATION_MESSAGE, code);
+        resolve();
+        return;
+      }
       const state = String(doneEvent?.state ?? "");
       const remark = remarkText(doneEvent?.remark) ?? (code === 0 ? "completed" : stderr.trim().split("\n").at(-1) ?? `exit ${code}`);
       const status: ExplorationStatus = code === 0 ? "completed" : code === 3 || state === "stopped" ? "stopped" : "failed";
@@ -192,6 +218,8 @@ async function run(row: Row): Promise<void> {
           (ev.run_id as string) ?? null,
           row.id,
         );
+        // Moderation can arrive before Kane has returned the remote exploration ID.
+        if (moderationStops.has(row.id)) stopExploration(row.scenario_id);
         break;
       case "progress":
         db.prepare("UPDATE explorations SET visited = ?, frontier = ? WHERE id = ?").run(Number(ev.visited ?? 0), Number(ev.frontier ?? 0), row.id);
@@ -262,6 +290,7 @@ async function projectFor(scenario: Scenario): Promise<string> {
 
 /** A fresh test session for whoever opens /explore/<id>, tagged with the running exploration. */
 export function exploreSession(scenarioId: string): { scenarioId: string; sessionId: string } {
+  assertAdventureAvailable(scenarioId);
   const scenario = getScenario(scenarioId, getAdventureVersion(scenarioId));
   const sessionId = newPreviewSession(scenario);
   const running = db.prepare("SELECT id FROM explorations WHERE scenario_id = ? AND status = 'running'").get(scenarioId) as { id: string } | undefined;

@@ -6,6 +6,8 @@ import type { Action, Hotspot, ImageStatus, Item, Room, Scenario } from "../../s
 import { ASSETS_DIR, BFL_API_KEY, BFL_MODEL, IMAGE_CONCURRENCY, IMAGE_HEIGHT, IMAGE_WIDTH, VISION_MODEL } from "./config.ts";
 import { db } from "./db.ts";
 import { detectHotspots, hotspotsEnabled } from "./hotspots.ts";
+import { IMAGE_MODERATION_MESSAGE, isImageModeration } from "../../shared/imageModeration.ts";
+import { blockModeratedAdventure } from "./imageModeration.ts";
 
 const IMAGES_DIR = path.join(ASSETS_DIR, "images");
 mkdirSync(IMAGES_DIR, { recursive: true });
@@ -68,18 +70,41 @@ export function imageUrl(row: ImageRow | undefined): string | null {
   return row?.path && (row.status === "ready" || row.status === "placeholder") ? `/assets/images/${path.basename(row.path)}` : null;
 }
 
+/** Inspect only this version's prompt hashes; a rejected old version must not block a repaired one. */
+export function sceneModeration(scenario: Scenario): string | null {
+  for (const room of scenario.rooms) {
+    for (const state of room.sceneStates) {
+      if (isImageModeration(imageRow(scenario, room.id, state.id)?.error)) return IMAGE_MODERATION_MESSAGE;
+    }
+  }
+  return null;
+}
+
+function stopModeratedRendering(scenario: Scenario): boolean {
+  if (!sceneModeration(scenario)) return false;
+  blockModeratedAdventure(scenario.id, scenario.version);
+  return true;
+}
+
 /**
  * Renders every scene image for a scenario. Resolves when the opening room's default
  * scene is done; the rest keep rendering in the background.
  */
 export async function renderScenario(scenario: Scenario): Promise<void> {
+  if (stopModeratedRendering(scenario)) return;
   const start = scenario.rooms.find((r) => r.id === scenario.startRoomId)!;
   await renderOne(scenario, start, start.sceneStates[0].id);
+  if (stopModeratedRendering(scenario)) return;
   // One worker per room at a time: a room's edits must wait for its default scene.
   const ordered = [start, ...scenario.rooms.filter((r) => r !== start)];
   void runPool(ordered, IMAGE_CONCURRENCY, async (room) => {
-    for (const s of room.sceneStates) await renderOne(scenario, room, s.id);
-  }).then(() => runPool(scenario.items, IMAGE_CONCURRENCY, (item) => renderItem(scenario, item)));
+    for (const s of room.sceneStates) {
+      if (stopModeratedRendering(scenario)) return;
+      await renderOne(scenario, room, s.id);
+    }
+  }).then(() => {
+    if (!stopModeratedRendering(scenario)) return runPool(scenario.items, IMAGE_CONCURRENCY, (item) => renderItem(scenario, item));
+  });
 }
 
 // ---- inventory item pictures ----
@@ -154,9 +179,11 @@ async function renderOne(scenario: Scenario, room: Room, stateId: string): Promi
     const file = path.join(IMAGES_DIR, `${key.join("_")}.jpg`);
     writeFileSync(file, bytes);
     upsert.run(...key, "ready", file, null);
-    await annotateFor(scenario, room, stateId, file, key);
+    if (!stopModeratedRendering(scenario)) await annotateFor(scenario, room, stateId, file, key);
   } catch (err) {
-    upsert.run(...key, "failed", null, String(err instanceof Error ? err.message : err));
+    const message = err instanceof Error ? err.message : String(err);
+    upsert.run(...key, "failed", null, message);
+    if (isImageModeration(message)) blockModeratedAdventure(scenario.id, scenario.version);
   }
 }
 
@@ -205,6 +232,11 @@ async function detectAndStore(scenario: Scenario, room: Room, file: string, key:
     }
   } catch (err) {
     console.error(`[hotspots] ${id}:`, err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    if (isImageModeration(message)) {
+      db.prepare(`UPDATE images SET error = ? ${where}`).run(message, ...key);
+      blockModeratedAdventure(scenario.id, scenario.version);
+    }
   } finally {
     annotating.delete(id);
   }

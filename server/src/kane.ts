@@ -27,12 +27,13 @@ interface RunOpts {
   url: string;
   objective: string;
   onStep?: (steps: KaneStep[]) => void;
+  signal?: AbortSignal;
 }
 
 /** Stderr lines that mean Kane itself couldn't run, not that the game is broken. */
 const INFRA_HINTS = /not authenticated|not logged in|login|credits?|unauthori[sz]ed|ECONNREFUSED|ENOTFOUND|chrome|browser.*(fail|crash|launch)|network/i;
 
-export function runKane({ runId, url, objective, onStep }: RunOpts): Promise<KaneResult> {
+export function runKane({ runId, url, objective, onStep, signal }: RunOpts): Promise<KaneResult> {
   const kaneArgs = ["run", objective, "--agent", "--url", url, "--max-steps", "45", "--timeout", String(KANE_TIMEOUT_S)];
   if (KANE_HEADLESS) kaneArgs.push("--headless");
   // With KANE_REPORT=1 the run goes through the hackathon helper, which also sends a redacted summary.
@@ -51,6 +52,15 @@ export function runKane({ runId, url, objective, onStep }: RunOpts): Promise<Kan
       env: { ...process.env, KANE_CLI_USER_AGENT: "room-for-error", PATH: `${process.env.HOME}/.kanehack/bin:${process.env.PATH}` },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const cancel = () => {
+      // Windows npm/native launchers have a Node child; stop the owned process tree as well.
+      if (process.platform === "win32" && child.pid) {
+        const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+        killer.on("error", () => child.kill("SIGTERM"));
+      } else child.kill("SIGTERM");
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    if (signal?.aborted) cancel();
     // Kane's own --timeout plus slack; past this the run is treated as an infrastructure problem.
     const killer = setTimeout(() => child.kill("SIGTERM"), (KANE_TIMEOUT_S + 60) * 1000);
 
@@ -86,7 +96,11 @@ export function runKane({ runId, url, objective, onStep }: RunOpts): Promise<Kan
       stderr = (stderr + chunk.toString()).slice(-4000);
     });
 
+    let finished = false;
     const finish = (exitCode: number | null) => {
+      if (finished) return;
+      finished = true;
+      signal?.removeEventListener("abort", cancel);
       clearTimeout(killer);
       evidence.end();
       const e = end as Record<string, unknown> | null;

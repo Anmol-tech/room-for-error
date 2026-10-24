@@ -11,3 +11,7 @@ assets/
 # kane-cli explore writes step dumps into its working folder
 step_*.json
 run_summary.json
+
+# Keep generated Kane tests; evidence and replay output stay local.
+.testmuai/evidence/
+.testmuai/tests/output-*/

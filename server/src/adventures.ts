@@ -20,7 +20,9 @@ import { KANE_AUTO, MISSIONS_DIR } from "./config.ts";
 import { db } from "./db.ts";
 import { createScenario } from "./director.ts";
 import { applyAction, initialState, meetsRequirements, nextStep, useItem, visibleActions, type UseResult } from "./engine.ts";
-import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario } from "./flux.ts";
+import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario, sceneModeration } from "./flux.ts";
+import { IMAGE_MODERATION_MESSAGE, isImageModeration } from "../../shared/imageModeration.ts";
+import { blockModeratedAdventure } from "./imageModeration.ts";
 import { lockView } from "./locks.ts";
 import { isNote, noteSource, withNotes, withoutNotes } from "./notes.ts";
 import { endingOpen, playerKaneState, rehearse } from "./rehearsal.ts";
@@ -183,6 +185,7 @@ export function startAdventure(theme: string): AdventureSummary {
  */
 export function retryAdventure(id: string): AdventureSummary {
   const row = getAdventureRow(id);
+  if (isImageModeration(row.error)) throw new Conflict(IMAGE_MODERATION_MESSAGE);
   if (row.status !== "failed" || row.prepared || building.has(id)) return getAdventure(id);
   // Forget the failed scenario so the page doesn't show its title while the new one is written.
   db.prepare("UPDATE adventures SET status = 'planning', error = NULL, current_version = NULL, validator_issues = '[]', stages = ? WHERE id = ?").run(freshStages(), id);
@@ -222,11 +225,13 @@ async function build(id: string, theme: string): Promise<void> {
     setStage(id, stage, "active");
     setStatus(id, "rendering");
     await renderScenario(scenario);
+    assertNoImageModeration(scenario);
     setStage(id, stage, "complete");
 
     stage = "placing";
     setStage(id, stage, "active");
     await ensureOpeningHotspots(scenario);
+    assertNoImageModeration(scenario);
     setStage(id, stage, "complete");
 
     stage = "entrance";
@@ -260,9 +265,10 @@ export function seedPreparedMissions(): void {
     const current = getAdventureRow(scenario.id).current_version;
     if (current === null || current <= scenario.version) {
       saveScenarioVersion(scenario, validateScenario(scenario));
-      void renderScenario(scenario).then(() => setStatus(scenario.id, "ready"));
+      void renderScenario(scenario).then(() => { if (!sceneModeration(scenario)) setStatus(scenario.id, "ready"); });
     } else {
-      void renderScenario(getScenario(scenario.id, current)).then(() => setStatus(scenario.id, "ready"));
+      const latest = getScenario(scenario.id, current);
+      void renderScenario(latest).then(() => { if (!sceneModeration(latest)) setStatus(scenario.id, "ready"); });
     }
   }
 }
@@ -324,7 +330,21 @@ export function directorView(id: string): DirectorView {
 
 // ---- sessions ----
 
+function assertNoImageModeration(scenario: Scenario): void {
+  if (!sceneModeration(scenario)) return;
+  blockModeratedAdventure(scenario.id, scenario.version);
+  throw new Conflict(IMAGE_MODERATION_MESSAGE);
+}
+
+/** Used by player entry and both Kane launchers; never send moderation to game repair. */
+export function assertAdventureAvailable(scenarioId: string): void {
+  const row = getAdventureRow(scenarioId);
+  if (isImageModeration(row.error)) throw new Conflict(IMAGE_MODERATION_MESSAGE);
+  if (row.current_version !== null) assertNoImageModeration(getScenario(scenarioId, row.current_version));
+}
+
 export function createSession(scenarioId: string, kind: "player" | "preview", startState?: GameState): SessionView {
+  assertAdventureAvailable(scenarioId);
   const row = getAdventureRow(scenarioId);
   if (row.current_version === null) throw new NotFound(`Adventure ${scenarioId} has no playable scenario yet`);
   const scenario = getScenario(scenarioId, row.current_version);
@@ -372,6 +392,7 @@ const firstSentence = (text: string) => text.match(/^.*?[.!?](\s|$)/)?.[0].trim(
 export function getSessionView(id: string): SessionView {
   const row = getSessionRow(id);
   const scenario = getScenario(row.scenario_id, row.version);
+  assertNoImageModeration(scenario);
   const state: GameState = JSON.parse(row.state);
   const room = scenario.rooms.find((r) => r.id === state.roomId)!;
   const sceneStateId = state.sceneStates[room.id] ?? room.sceneStates[0].id;
@@ -474,6 +495,7 @@ function record(row: SessionRow, scenario: Scenario, label: string, outcome: Use
 export function act(sessionId: string, actionId: string, input?: string): SessionView {
   const row = getSessionRow(sessionId);
   const scenario = getScenario(row.scenario_id, row.version);
+  assertNoImageModeration(scenario);
   const label = scenario.actions.find((a) => a.id === actionId)?.label ?? actionId;
   record(row, scenario, label, applyAction(scenario, JSON.parse(row.state), actionId, input));
   return getSessionView(sessionId);
@@ -483,6 +505,7 @@ export function act(sessionId: string, actionId: string, input?: string): Sessio
 export function use(sessionId: string, itemId: string, actionIds: string[]): SessionView {
   const row = getSessionRow(sessionId);
   const scenario = getScenario(row.scenario_id, row.version);
+  assertNoImageModeration(scenario);
   const state: GameState = JSON.parse(row.state);
   const room = scenario.rooms.find((r) => r.id === state.roomId)!;
   const spots = imageHotspots(imageRow(scenario, room.id, state.sceneStates[room.id] ?? room.sceneStates[0].id));
@@ -504,6 +527,7 @@ export function use(sessionId: string, itemId: string, actionIds: string[]): Ses
 export function hint(sessionId: string): HintResult {
   const row = getSessionRow(sessionId);
   const scenario = getScenario(row.scenario_id, row.version);
+  assertNoImageModeration(scenario);
   const state: GameState = JSON.parse(row.state);
   const step = nextStep(scenario, state);
   if (!step) return { level: 1, text: state.endingId ? "You're already out." : "Look around carefully; something here still matters." };

@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import type { AdventureSummary, GenStageKey, GenStageStatus } from "../../shared/schema.ts";
 import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
+import { isImageModeration } from "../../shared/imageModeration.ts";
+import { ModerationNotice } from "./ModerationNotice.tsx";
 
 const LABELS: Record<GenStageKey, string> = {
   writing: "Writing the mystery",
@@ -63,6 +65,8 @@ export function Creating() {
   const stages = adventure?.stages ?? [];
   const placed = stages.find((s) => s.key === "placing")?.status === "complete";
   const failed = adventure?.status === "failed";
+
+  if (isImageModeration(adventure?.error ?? error)) return <ModerationNotice theme={adventure?.theme} />;
 
   return (
     <div className="arrival-page">

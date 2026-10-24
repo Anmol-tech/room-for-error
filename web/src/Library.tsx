@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { LibraryEntry } from "../../shared/schema.ts";
 import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
+import { isImageModeration } from "../../shared/imageModeration.ts";
 
 type Filter = "all" | "ready" | "building" | "failed";
 const FILTERS: Filter[] = ["all", "ready", "building", "failed"];
@@ -109,7 +110,7 @@ export function Library() {
                 {e.rooms.length > 0 && <p className="library-rooms">{e.rooms.join(" · ")}</p>}
                 <p className="library-meta">
                   {e.status === "failed" ? (
-                    <span className="library-status failed">{e.error ? "Generation failed" : "Failed"}</span>
+                    <span className="library-status failed">{isImageModeration(e.error) ? "Image moderation" : e.error ? "Generation failed" : "Failed"}</span>
                   ) : e.kane ? (
                     <span className={`library-status ${e.kane}`}>{KANE_LABEL[e.kane]}</span>
                   ) : (
