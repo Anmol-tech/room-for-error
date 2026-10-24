@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { ActionView, HintResult, SessionView } from "../../shared/schema.ts";
 import { api } from "./api.ts";
 import { DirectorPanel } from "./DirectorPanel.tsx";
 import { Ending } from "./Ending.tsx";
 import { Inventory } from "./Inventory.tsx";
-import { kaneSample, PLAYER_COPY } from "./kaneSample.ts";
+import { KaneWindow } from "./KaneWindow.tsx";
 import { Keypad } from "./Keypad.tsx";
 import { Narration } from "./Narration.tsx";
 import { HistorySheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
@@ -24,7 +24,9 @@ export function Game() {
   const settings = useSettings();
   // ?hints=1 or 0 overrides the saved setting for this page (automated test runs use hints=1).
   const hintsParam = params.get("hints");
-  const hints = hintsParam === "1" ? true : hintsParam === "0" ? false : settings.hints;
+  // ?test=1 is the mode Kane plays in: every option listed, instant narration, no room transitions.
+  const testMode = params.get("test") === "1";
+  const hints = testMode || hintsParam === "1" ? true : hintsParam === "0" ? false : settings.hints;
   const [muted, toggleSound] = useSound();
 
   const [view, setView] = useState<SessionView | null>(null);
@@ -45,9 +47,32 @@ export function Game() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(() => params.get("director") === "1");
   const creating = useRef(false);
-  const kane = kaneSample(scenarioId);
 
-  const announceRoom = (v: SessionView) => setTransition({ index: v.roomIndex, name: v.roomName, tagline: v.roomTagline, key: Date.now() });
+  // In test mode the address names the room (or ending) the game is in: Kane's explorer tells screens
+  // apart by address, and every room otherwise shares one, so it would never see past the first.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const place = view ? (view.ending ? `ending-${view.ending.id}` : view.roomId) : null;
+  const addressChecked = useRef(false);
+  useEffect(() => {
+    if (!testMode || !place) return;
+    const path = `/play/${encodeURIComponent(scenarioId)}/${encodeURIComponent(place)}`;
+    // On arrival, an address naming another room than the game is in is a saved address replayed
+    // against a game that has moved on. Rooms can't be jumped to, so start over in a fresh game.
+    if (!addressChecked.current) {
+      addressChecked.current = true;
+      const asked = location.pathname.split("/")[3];
+      if (asked && decodeURIComponent(asked) !== place) {
+        navigate(`/explore/${encodeURIComponent(scenarioId)}`, { replace: true });
+        return;
+      }
+    }
+    if (location.pathname !== path) navigate(`${path}${location.search}`, { replace: true });
+  }, [testMode, place, scenarioId, location.pathname, location.search, navigate]);
+
+  const announceRoom = (v: SessionView) => {
+    if (!testMode) setTransition({ index: v.roomIndex, name: v.roomName, tagline: v.roomTagline, key: Date.now() });
+  };
 
   // Start a new session when the URL has none; otherwise resume it (progress lives on the server).
   useEffect(() => {
@@ -251,13 +276,15 @@ export function Game() {
   }
 
   const topbar = (
-    <TopBar view={view} hints={hints} muted={muted} kane={kane} onToggleSound={toggleSound} onPause={() => setPaused(true)} onDirector={() => setDirectorOpen(true)} />
+    <TopBar view={view} hints={hints} muted={muted} onToggleSound={toggleSound} onPause={() => setPaused(true)} onDirector={() => setDirectorOpen(true)} />
   );
   const layers = (
     <>
-      {paused && <PauseMenu stats={view.stats} muted={muted} onToggleSound={toggleSound} onResume={() => setPaused(false)} onRestart={restart} />}
+      {paused && <PauseMenu stats={view.stats} muted={muted} onToggleSound={toggleSound} onResume={() => setPaused(false)} onRestart={restart} allowRestart={!testMode} />}
       {historyOpen && <HistorySheet log={view.log} onClose={() => setHistoryOpen(false)} />}
       {directorOpen && <DirectorPanel adventureId={view.scenarioId} sessionVersion={view.scenarioVersion} onClose={() => setDirectorOpen(false)} />}
+      {/* Kane at work, floating bottom-right while you play (not inside Kane's own test sessions). */}
+      {!testMode && <KaneWindow adventureId={view.scenarioId} />}
     </>
   );
 
@@ -265,7 +292,7 @@ export function Game() {
     return (
       <div className="game-page ended">
         {topbar}
-        <Ending view={view} onTryOther={restart} />
+        <Ending view={view} onTryOther={restart} testMode={testMode} />
         {layers}
       </div>
     );
@@ -322,7 +349,7 @@ export function Game() {
 
           {/* Narration and inventory live under the picture, so nothing in the room is ever covered. */}
           <div className="strip">
-            <Narration text={view.message ?? view.roomDescription} tone={view.messageKind} beat={beat} hint={hint} hintBusy={hintBusy} onHint={askHint} onHistory={() => setHistoryOpen(true)}>
+            <Narration instant={testMode} text={view.message ?? view.roomDescription} tone={view.messageKind} beat={beat} hint={hint} hintBusy={hintBusy} onHint={askHint} onHistory={() => setHistoryOpen(true)}>
               {(hints ? exploreList : unspotted).length > 0 && (
                 <div className="choices-row" aria-label={hints ? "Things to explore" : "Other ways to go"}>
                   {hints && <span className="choices-label">Things to explore</span>}
@@ -364,13 +391,20 @@ interface TopBarProps {
   view: SessionView;
   hints: boolean;
   muted: boolean;
-  kane: ReturnType<typeof kaneSample>;
   onToggleSound: () => void;
   onPause: () => void;
   onDirector: () => void;
 }
 
-function TopBar({ view, hints, muted, kane, onToggleSound, onPause, onDirector }: TopBarProps) {
+const KANE_COPY: Record<NonNullable<SessionView["kane"]>["state"], string> = {
+  testing: "Checking the route ahead",
+  repairing: "Preparing the next passage",
+  passed: "Route ready",
+  delayed: "This passage needs a little longer",
+};
+
+function TopBar({ view, hints, muted, onToggleSound, onPause, onDirector }: TopBarProps) {
+  const kane = view.kane;
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -391,8 +425,8 @@ function TopBar({ view, hints, muted, kane, onToggleSound, onPause, onDirector }
       </div>
       <div className="topbar-right">
         {kane && (
-          <span className={`kane-chip ${kane.player}`} title="Sample status. Real Kane checks connect on event day.">
-            <i aria-hidden /> Kane · {PLAYER_COPY[kane.player]} <span className="sample-tag">Sample</span>
+          <span className={`kane-chip ${kane.state}`} title="Kane test-plays every escape route before it opens">
+            <i aria-hidden /> Kane · {kane.newerVersion && kane.state !== "passed" ? "A repaired version is ready (restart)" : KANE_COPY[kane.state]}
           </span>
         )}
         <button
@@ -419,7 +453,7 @@ function TopBar({ view, hints, muted, kane, onToggleSound, onPause, onDirector }
           </svg>
         </button>
         <button type="button" className="director-btn" onClick={onDirector}>
-          <i className={kane ? "live" : ""} aria-hidden /> Director View
+          <i className={kane && kane.state !== "passed" ? "live" : ""} aria-hidden /> Director View
         </button>
       </div>
     </header>

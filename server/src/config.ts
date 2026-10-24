@@ -9,6 +9,24 @@ export const DB_PATH = path.join(ASSETS_DIR, "room-for-error.db");
 // Not PORT: dev launchers set PORT to the web port (5180), which would clash with Vite.
 export const PORT = Number(process.env.API_PORT ?? 3001);
 
+// Kane CLI: where its browser reaches the game, and how runs are launched.
+export const KANE_APP_URL = (process.env.KANE_APP_URL || "http://localhost:5180").replace(/\/$/, "");
+/** Show the browser while Kane plays unless KANE_HEADLESS=1. */
+export const KANE_HEADLESS = process.env.KANE_HEADLESS === "1";
+/** Run through `kanehack report` so the hackathon gets a redacted run summary (needs `kanehack consent yes`). */
+export const KANE_REPORT = process.env.KANE_REPORT === "1";
+/** Rehearse new adventures automatically once they're ready (KANE_AUTO=0 to only run from the Director View). */
+export const KANE_AUTO = process.env.KANE_AUTO !== "0";
+export const KANE_TIMEOUT_S = Number(process.env.KANE_TIMEOUT_S || 420);
+/**
+ * Visible Kane runs share one Chrome, and two at once were seen playing in the same test session,
+ * so visible runs go one at a time. Headless runs each get their own browser.
+ */
+// One run at a time: two concurrent runs were seen driving the same browser tab, and nobody has
+// verified that headless runs are isolated from each other.
+export const KANE_CONCURRENCY = 1;
+export const KANE_MAX_REPAIRS = 2;
+
 // Director LLM. Both providers are configured side by side; LLM_PROVIDER picks one.
 // Without LLM_PROVIDER: OpenAI if its key is set, else OpenRouter.
 const PROVIDERS = {
@@ -16,7 +34,7 @@ const PROVIDERS = {
     provider: "openai",
     apiKey: process.env.OPENAI_API_KEY || "",
     baseURL: undefined,
-    model: process.env.OPENAI_MODEL || "gpt-5.5",
+    model: process.env.OPENAI_MODEL || "gpt-6-luna",
   },
   openrouter: {
     provider: "openrouter",
@@ -34,7 +52,7 @@ export const LLM =
   PROVIDERS[(requested as keyof typeof PROVIDERS | undefined) ?? (PROVIDERS.openai.apiKey ? "openai" : "openrouter")];
 
 /** Vision model that finds clickable objects in scene images. Must accept images. */
-export const VISION_MODEL = process.env.VISION_MODEL || (LLM.provider === "openrouter" ? "google/gemma-4-26b-a4b-it" : "gpt-5.5");
+export const VISION_MODEL = process.env.VISION_MODEL || (LLM.provider === "openrouter" ? "google/gemma-4-26b-a4b-it" : "gpt-5.4-mini");
 
 /**
  * Reasoning effort for models that support it ("none", "low", "medium", "high"). Lower is faster:

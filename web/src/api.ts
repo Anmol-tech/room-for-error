@@ -1,4 +1,4 @@
-import type { AdventureSummary, DirectorView, HintResult, SessionView } from "../../shared/schema.ts";
+import type { AdventureSummary, DirectorView, HintResult, KaneLive, KaneView, SessionView } from "../../shared/schema.ts";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -23,4 +23,12 @@ export const api = {
   use: (sessionId: string, itemId: string, actionIds: string[]) =>
     call<SessionView>(`/api/sessions/${sessionId}/use`, { method: "POST", body: JSON.stringify({ itemId, actionIds }) }),
   hint: (sessionId: string) => call<HintResult>(`/api/sessions/${sessionId}/hint`, { method: "POST" }),
+  kane: (id: string) => call<KaneView>(`/api/adventures/${encodeURIComponent(id)}/kane`),
+  kaneLive: (id: string) => call<KaneLive>(`/api/adventures/${encodeURIComponent(id)}/kane/live`),
+  rehearse: (id: string) => call<{ queued: string[] }>(`/api/adventures/${encodeURIComponent(id)}/kane`, { method: "POST" }),
+  explore: (id: string) => call<{ queued: string }>(`/api/adventures/${encodeURIComponent(id)}/explore`, { method: "POST" }),
+  stopExplore: (id: string) => call<{ stopping: boolean }>(`/api/adventures/${encodeURIComponent(id)}/explore`, { method: "DELETE" }),
+  exploreMap: (id: string) => call<{ url: string | null }>(`/api/adventures/${encodeURIComponent(id)}/explore/map`, { method: "POST" }),
+  exploreSession: (id: string) => call<{ scenarioId: string; sessionId: string }>(`/api/explore/${encodeURIComponent(id)}/session`, { method: "POST" }),
+  preview: (runId: string) => call<{ scenarioId: string; sessionId: string; version: number }>(`/api/preview/${encodeURIComponent(runId)}`),
 };

@@ -16,11 +16,12 @@ import type {
   SessionView,
   ValidatorIssue,
 } from "../../shared/schema.ts";
-import { MISSIONS_DIR } from "./config.ts";
+import { KANE_AUTO, MISSIONS_DIR } from "./config.ts";
 import { db } from "./db.ts";
 import { createScenario } from "./director.ts";
 import { applyAction, initialState, meetsRequirements, nextStep, useItem, visibleActions, type UseResult } from "./engine.ts";
 import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario } from "./flux.ts";
+import { endingOpen, playerKaneState, rehearse } from "./rehearsal.ts";
 import { validateScenario, validateShape } from "./validator.ts";
 
 interface AdventureRow {
@@ -125,6 +126,13 @@ export function summarize(row: AdventureRow): AdventureSummary {
   };
 }
 
+/** The version new players get. */
+export function getAdventureVersion(id: string): number {
+  const v = getAdventureRow(id).current_version;
+  if (v === null) throw new NotFound(`Adventure ${id} has no playable scenario yet`);
+  return v;
+}
+
 export function getAdventure(id: string): AdventureSummary {
   return summarize(getAdventureRow(id));
 }
@@ -170,6 +178,8 @@ async function build(id: string, theme: string): Promise<void> {
     setStage(id, stage, "active");
     setStatus(id, "ready");
     setStage(id, stage, "complete");
+    // Kane starts playing every route while the player explores the first room.
+    if (KANE_AUTO) rehearse(id);
   } catch (err) {
     setStage(id, stage, "failed");
     setStatus(id, "failed", err instanceof Error ? err.message : String(err));
@@ -189,8 +199,14 @@ export function seedPreparedMissions(): void {
     db.prepare(
       "INSERT INTO adventures (id, theme, status, prepared, stages) VALUES (?, ?, 'rendering', 1, ?) ON CONFLICT (id) DO UPDATE SET theme = excluded.theme, prepared = 1, stages = excluded.stages",
     ).run(scenario.id, scenario.theme, complete);
-    saveScenarioVersion(scenario, validateScenario(scenario));
-    void renderScenario(scenario).then(() => setStatus(scenario.id, "ready"));
+    // Never move an adventure backwards: a Kane repair may already have made a newer version.
+    const current = getAdventureRow(scenario.id).current_version;
+    if (current === null || current <= scenario.version) {
+      saveScenarioVersion(scenario, validateScenario(scenario));
+      void renderScenario(scenario).then(() => setStatus(scenario.id, "ready"));
+    } else {
+      void renderScenario(getScenario(scenario.id, current)).then(() => setStatus(scenario.id, "ready"));
+    }
   }
 }
 
@@ -238,6 +254,29 @@ export function createSession(scenarioId: string, kind: "player" | "preview", st
     "INSERT INTO sessions (id, scenario_id, version, kind, state, log, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
   ).run(id, scenarioId, scenario.version, kind, JSON.stringify(state), JSON.stringify([arrival]), arrival.at);
   return getSessionView(id);
+}
+
+/** The ending a session reached, or null if it hasn't finished. */
+export function sessionEnding(sessionId: string): string | null {
+  const row = db.prepare("SELECT state FROM sessions WHERE id = ?").get(sessionId) as { state: string } | undefined;
+  return row ? ((JSON.parse(row.state) as GameState).endingId ?? null) : null;
+}
+
+/** A fresh session for an automated test run, never shared with a player. */
+export function newPreviewSession(scenario: Scenario): string {
+  const state = initialState(scenario);
+  const room = scenario.rooms.find((r) => r.id === state.roomId)!;
+  const arrival: LogEntry = { at: new Date().toISOString(), roomName: room.name, action: null, text: room.description, kind: "info", found: [] };
+  const id = randomUUID();
+  db.prepare("INSERT INTO sessions (id, scenario_id, version, kind, state, log, started_at) VALUES (?, ?, ?, 'preview', ?, ?, ?)").run(
+    id,
+    scenario.id,
+    scenario.version,
+    JSON.stringify(state),
+    JSON.stringify([arrival]),
+    arrival.at,
+  );
+  return id;
 }
 
 function getSessionRow(id: string): SessionRow {
@@ -299,12 +338,25 @@ export function getSessionView(id: string): SessionView {
       itemsTotal: scenario.items.length,
     },
     log: JSON.parse(row.log),
+    kane: row.kind === "player" ? playerKaneState(scenario) : null,
   };
 }
 
 /** Saves the outcome of an action (or item use) and appends it to the session's narration log. */
-function record(row: SessionRow, scenario: Scenario, label: string, result: UseResult): void {
+function record(row: SessionRow, scenario: Scenario, label: string, outcome: UseResult): void {
   const before: GameState = JSON.parse(row.state);
+  let result = outcome;
+  if (result.ok && result.state.endingId && row.kind === "player" && !endingOpen(scenario, result.state.endingId)) {
+    const newer = getAdventureVersion(scenario.id) > scenario.version;
+    result = {
+      ok: false,
+      state: before,
+      reason: "locked",
+      message: newer
+        ? "This passage was repaired after you entered. Restart the mission from the menu to play the repaired room; your way out is ready there."
+        : "This passage needs a little longer. Kane is still checking the way out; try again in a moment.",
+    };
+  }
   const kind = result.ok ? (result.state.endingId ? "success" : "info") : "error";
   const gained = result.state.inventory.filter((i) => !before.inventory.includes(i));
   const found: string[] = JSON.parse(row.found);

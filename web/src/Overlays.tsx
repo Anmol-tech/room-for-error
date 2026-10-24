@@ -51,9 +51,11 @@ interface PauseProps {
   onToggleSound: () => void;
   onResume: () => void;
   onRestart: () => void;
+  /** False in test sessions, which must not be restarted or left. */
+  allowRestart?: boolean;
 }
 
-export function PauseMenu({ stats, muted, onToggleSound, onResume, onRestart }: PauseProps) {
+export function PauseMenu({ stats, muted, onToggleSound, onResume, onRestart, allowRestart = true }: PauseProps) {
   const settings = useSettings();
   useEscape(onResume);
   return (
@@ -102,12 +104,16 @@ export function PauseMenu({ stats, muted, onToggleSound, onResume, onRestart }: 
           <button type="button" className="btn-primary" onClick={onResume} autoFocus>
             Resume
           </button>
-          <button type="button" className="btn-ghost" onClick={onRestart}>
-            Restart mission
-          </button>
-          <Link to="/" className="btn-ghost">
-            Leave room
-          </Link>
+          {allowRestart && (
+            <>
+              <button type="button" className="btn-ghost" onClick={onRestart}>
+                Restart mission
+              </button>
+              <Link to="/" className="btn-ghost">
+                Leave room
+              </Link>
+            </>
+          )}
         </div>
       </section>
     </div>

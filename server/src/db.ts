@@ -88,3 +88,42 @@ for (const [name, type] of [
 }
 const adventureCols = db.prepare("PRAGMA table_info(adventures)").all() as { name: string }[];
 if (!adventureCols.some((c) => c.name === "stages")) db.exec("ALTER TABLE adventures ADD COLUMN stages TEXT");
+
+// Kane runs and the automatic repairs they trigger.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS kane_runs (
+    id TEXT PRIMARY KEY,
+    scenario_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    route_id TEXT NOT NULL,
+    ending_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    one_liner TEXT,
+    summary TEXT,
+    reason TEXT,
+    steps TEXT NOT NULL DEFAULT '[]',
+    credits REAL,
+    duration_s REAL,
+    test_url TEXT,
+    evidence_path TEXT,
+    prior INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS repairs (
+    id TEXT PRIMARY KEY,
+    scenario_id TEXT NOT NULL,
+    route_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    from_version INTEGER NOT NULL,
+    to_version INTEGER,
+    status TEXT NOT NULL,
+    changes TEXT NOT NULL DEFAULT '[]',
+    note TEXT,
+    created_at TEXT NOT NULL
+  );
+`);

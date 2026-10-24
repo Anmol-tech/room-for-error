@@ -125,25 +125,126 @@ export interface GameState {
   endingId?: Id;
 }
 
-export type KaneRunStatus = "queued" | "running" | "passed" | "failed" | "infra_error";
+/** off_route: Kane finished through a different exit than the route it was testing (not a game problem). */
+export type KaneRunStatus = "queued" | "running" | "passed" | "failed" | "off_route" | "infra_error" | "cancelled";
+
+export interface KaneStep {
+  step: number;
+  status: "running" | "done" | "failed";
+  remark: string;
+  at: string;
+}
 
 export interface KaneRun {
   id: Id;
   scenarioId: Id;
   scenarioVersion: number;
   routeId: Id;
-  startState: GameState;
+  /** The ending this route must reach. */
+  endingId: Id;
   objective: string;
   status: KaneRunStatus;
-  exitCode?: number;
-  /** Kane's final summary, shown in the director panel. */
-  summary?: string;
-  /** Raw NDJSON from kane-cli --agent, e.g. assets/runs/<id>.ndjson */
-  evidencePath?: string;
-  startedAt?: string;
-  finishedAt?: string;
+  exitCode: number | null;
+  /** Kane's own short description of the run. */
+  oneLiner: string | null;
+  summary: string | null;
+  /** Why the run stopped, from Kane or from the runner (timeouts, sign-in problems). */
+  reason: string | null;
+  steps: KaneStep[];
+  credits: number | null;
+  durationS: number | null;
+  /** Test Manager link for the run, when Kane uploaded it. */
+  testUrl: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
   /** True for results recorded before the demo. The UI must label these. */
   prior: boolean;
+}
+
+/** One automatic repair: a failed Kane run on `fromVersion` produced `toVersion`. */
+export interface Repair {
+  id: Id;
+  scenarioId: Id;
+  routeId: Id;
+  runId: Id;
+  fromVersion: number;
+  toVersion: number | null;
+  status: "repairing" | "repaired" | "gave_up";
+  /** Human-readable changes between the versions (spoiler-bearing). */
+  changes: { field: string; before: string; after: string }[];
+  note: string | null;
+  createdAt: string;
+}
+
+/** Route readiness for one scenario version, as players and the Director View see it. */
+export type RouteReadiness = "untested" | "testing" | "repairing" | "passed" | "withheld";
+
+export interface KaneView {
+  enabled: boolean;
+  /** Why Kane can't run, e.g. not signed in. */
+  problem: string | null;
+  currentVersion: number;
+  routes: { routeId: Id; endingId: Id; label: string; readiness: RouteReadiness; latestRunId: Id | null }[];
+  runs: KaneRun[];
+  repairs: Repair[];
+}
+
+/** What Kane is doing right now, for the floating "Kane at work" window. */
+export interface KaneLive {
+  /** The run in progress, or the most recent one when nothing is running. */
+  run: KaneRun | null;
+  /** Route label for that run, e.g. "Route A · Rooftop Escape". */
+  routeLabel: string | null;
+  /** A live copy of the game session Kane is playing (what Kane sees). */
+  session: SessionView | null;
+  /** Runs waiting their turn (Kane plays one route at a time). */
+  queued: number;
+  currentVersion: number;
+  routes: KaneView["routes"];
+  /** Why Kane can't run, e.g. not signed in. */
+  problem: string | null;
+  /** Kane's latest free exploration of this adventure, if any. */
+  exploration: ExplorationView | null;
+}
+
+export type ExplorationStatus = "queued" | "running" | "completed" | "stopped" | "failed";
+
+/** What Kane reached while exploring with no script, measured from its own test sessions. */
+export interface ExploreCoverage {
+  rooms: {
+    id: Id;
+    name: string;
+    visited: boolean;
+    actions: { id: Id; label: string; tried: boolean; succeeded: boolean; onRoute: boolean }[];
+  }[];
+  endings: { id: Id; title: string; reached: boolean }[];
+  items: { id: Id; name: string; found: boolean }[];
+  totals: { rooms: number; roomsVisited: number; actions: number; actionsTried: number; endings: number; endingsReached: number };
+}
+
+/** One run of `kane-cli explore` over an adventure version. */
+export interface ExplorationView {
+  id: Id;
+  scenarioId: Id;
+  scenarioVersion: number;
+  status: ExplorationStatus;
+  /** Kane's own plain-language reason the run stopped (e.g. "completed", "budget"). */
+  remark: string | null;
+  /** Kane's exploration plan, as it summarised it. */
+  plan: string | null;
+  /** Kane's counters: screens it has visited, and places it still means to try. */
+  visited: number;
+  frontier: number;
+  /** Newest last: what Kane is trying and doing. */
+  feed: { at: string; text: string; kind: "intent" | "action" | "finding" | "info" }[];
+  /** Fresh game sessions Kane opened while exploring. */
+  sessions: number;
+  coverage: ExploreCoverage;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Kane's interactive map of the exploration, once its viewer is running. */
+  mapUrl: string | null;
 }
 
 export interface ValidatorIssue {
@@ -220,6 +321,8 @@ export interface SessionView {
   endingCount: number;
   /** Set only on a use-item response that needs a code: open the keypad for this action. */
   openInputFor?: Id;
+  /** Kane's state for the routes of this version; null when Kane has never run on it. */
+  kane: { state: "testing" | "repairing" | "passed" | "delayed"; newerVersion: boolean } | null;
 }
 
 export interface SessionStats {

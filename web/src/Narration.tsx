@@ -3,6 +3,8 @@ import type { HintResult } from "../../shared/schema.ts";
 import { CHAR_MS, useSettings } from "./settings.ts";
 
 interface Props {
+  /** Show the whole line at once (test mode). */
+  instant?: boolean;
   text: string;
   tone: "info" | "success" | "error" | null;
   /** Changes on every new line so the typewriter restarts. */
@@ -16,9 +18,9 @@ interface Props {
 }
 
 /** Translucent narration panel: typed-out text, click or Enter to reveal it all, history and hints. */
-export function Narration({ text, tone, beat, hint, hintBusy, onHint, onHistory, children }: Props) {
+export function Narration({ instant, text, tone, beat, hint, hintBusy, onHint, onHistory, children }: Props) {
   const { narration } = useSettings();
-  const ms = CHAR_MS[narration];
+  const ms = instant ? 0 : CHAR_MS[narration];
   const [shown, setShown] = useState(ms ? 0 : text.length);
   const [collapsed, setCollapsed] = useState(false);
 

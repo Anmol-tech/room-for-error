@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { SessionView } from "../../shared/schema.ts";
-import { kaneSample } from "./kaneSample.ts";
 import { elapsed } from "./Overlays.tsx";
 
 interface Props {
   view: SessionView;
   onTryOther: () => void;
+  /** Test sessions (Kane) get no buttons that leave or restart the session. */
+  testMode?: boolean;
 }
 
 /** Full-width ending: the final scene, the outcome, stats, and an optional recap of the run. */
-export function Ending({ view, onTryOther }: Props) {
+export function Ending({ view, onTryOther, testMode }: Props) {
   const [recap, setRecap] = useState(false);
   const ending = view.ending!;
-  const kane = kaneSample(view.scenarioId);
   // Rooms visited in order, with what was found and the main choices (not dead ends or wrong codes).
   const steps = view.log.filter((e) => e.action && e.kind !== "error");
 
@@ -50,19 +50,21 @@ export function Ending({ view, onTryOther }: Props) {
           </div>
         </dl>
 
-        <div className="ending-actions">
-          <Link to="/" className="btn-primary">
-            Create another room
-          </Link>
-          <button type="button" className="btn-ghost" onClick={() => setRecap((r) => !r)} aria-expanded={recap}>
-            {recap ? "Hide mission recap" : "View mission recap"}
-          </button>
-          {view.endingCount > 1 && (
-            <button type="button" className="btn-ghost" onClick={onTryOther}>
-              Try the other route
+        {!testMode && (
+          <div className="ending-actions">
+            <Link to="/" className="btn-primary">
+              Create another room
+            </Link>
+            <button type="button" className="btn-ghost" onClick={() => setRecap((r) => !r)} aria-expanded={recap}>
+              {recap ? "Hide mission recap" : "View mission recap"}
             </button>
-          )}
-        </div>
+            {view.endingCount > 1 && (
+              <button type="button" className="btn-ghost" onClick={onTryOther}>
+                Try the other route
+              </button>
+            )}
+          </div>
+        )}
 
         {recap && (
           <div className="recap">
@@ -76,14 +78,7 @@ export function Ending({ view, onTryOther }: Props) {
             </ol>
             <details className="kane-recap">
               <summary>Kane's technical recap</summary>
-              {kane ? (
-                <p>
-                  <span className="sample-tag">Sample</span> In the sample run, Kane tested both routes, caught a clue that didn't match its lock, and verified the
-                  repair on version {kane.testedVersion}. Open the Director View for the full timeline.
-                </p>
-              ) : (
-                <p>No Kane runs for this room yet. Kane checks connect on event day.</p>
-              )}
+              <p>Kane's runs, failures and repairs for this room are in the Director View (top right).</p>
             </details>
           </div>
         )}

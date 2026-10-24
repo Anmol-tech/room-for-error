@@ -17,6 +17,9 @@ import {
 import { ASSETS_DIR, LLM, PORT } from "./config.ts";
 import { directorEnabled } from "./director.ts";
 import { fluxEnabled, resetInterruptedRenders } from "./flux.ts";
+import { getRun, kaneView, rehearse, resetInterruptedRuns } from "./rehearsal.ts";
+import { kaneLive } from "./kaneLive.ts";
+import { explore, exploreSession, openMap, resetInterruptedExplorations, stopExploration } from "./explore.ts";
 
 const app = express();
 app.use(express.json());
@@ -69,6 +72,49 @@ app.post("/api/sessions/:id/hint", (req, res) => {
   res.json(hint(req.params.id));
 });
 
+// ---- Kane ----
+
+app.get("/api/adventures/:id/kane", async (req, res) => {
+  res.json(await kaneView(req.params.id));
+});
+
+app.post("/api/adventures/:id/kane", (req, res) => {
+  res.status(202).json({ queued: rehearse(req.params.id) });
+});
+
+// ---- Kane explore: free exploration with no script ----
+
+app.post("/api/adventures/:id/explore", (req, res) => {
+  res.status(202).json({ queued: explore(req.params.id) });
+});
+
+app.delete("/api/adventures/:id/explore", (req, res) => {
+  stopExploration(req.params.id);
+  res.status(202).json({ stopping: true });
+});
+
+/** Starts Kane's interactive map viewer for the latest exploration and returns its local address. */
+app.post("/api/adventures/:id/explore/map", async (req, res) => {
+  res.json({ url: await openMap(req.params.id) });
+});
+
+/** The exploration's entry page asks for a fresh, tagged test session on every visit. */
+app.post("/api/explore/:id/session", (req, res) => {
+  res.json(exploreSession(req.params.id));
+});
+
+/** Kane at work: the current run and a live copy of the session it's playing. */
+app.get("/api/adventures/:id/kane/live", async (req, res) => {
+  res.json(await kaneLive(req.params.id));
+});
+
+/** Where a Kane preview URL leads: the run's own isolated session. */
+app.get("/api/preview/:runId", (req, res) => {
+  const run = getRun(req.params.runId);
+  if (!run) throw new NotFound(`No Kane run ${req.params.runId}`);
+  res.json({ scenarioId: run.scenarioId, sessionId: run.sessionId, version: run.scenarioVersion });
+});
+
 const onError: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof NotFound) res.status(404).json({ error: err.message });
   else if (err instanceof z.ZodError) res.status(400).json({ error: err.issues.map((i) => i.message).join("; ") });
@@ -80,6 +126,8 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 app.use(onError);
 
 resetInterruptedRenders();
+resetInterruptedRuns();
+resetInterruptedExplorations();
 seedPreparedMissions();
 resumeRendering();
 app.listen(PORT, () => {

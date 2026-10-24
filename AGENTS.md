@@ -31,7 +31,7 @@ assets/               generated images and Kane run evidence
 6. **Infra errors aren't game bugs.** Login, network, browser, or credit failures from kane-cli are `infra_error` and never go to the director.
 7. **Kane-friendly UI.** Every action is a real `<button>` with a visible label and `data-action-id="<action.id>"`. Inventory and the current ending are visible text, not only images. Clickable scene hotspots are a shortcut on top of these buttons, never a replacement: Kane objectives and accessibility rely on the buttons. With hints off (the default for players) buttons for actions that have a hotspot are visually hidden but stay in the DOM; Kane runs should load pages with `?hints=1` so every option is visible.
 8. **Secrets stay on the server.** `OPENROUTER_API_KEY` (or `OPENAI_API_KEY`), `BFL_API_KEY` in `.env` (never committed). Each person uses their own.
-9. **Bounded work.** Max 2 concurrent Kane runs, max 2 repair attempts per route; after that the route is withheld.
+9. **Bounded work.** One Kane run at a time, headless or not (two concurrent runs were seen sharing a session; headless isolation is unverified); max 2 repair attempts per route, after which the route is withheld.
 
 ## Kane
 - Product runs: `kane-cli run --url http://localhost:5180/preview/<runId> "<objective>" --agent`, raw NDJSON saved to `assets/runs/<runId>.ndjson`.

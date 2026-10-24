@@ -7,3 +7,7 @@ assets/
 *.db
 *.db-*
 .DS_Store
+
+# kane-cli explore writes step dumps into its working folder
+step_*.json
+run_summary.json
