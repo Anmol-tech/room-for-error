@@ -225,10 +225,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .canvas-wait { position: absolute; inset: 0; display: grid; place-content: center; gap: 0.5rem; color: var(--muted); }
 
 .spots { position: absolute; inset: 0; }
-.spot { position: absolute; padding: 0; border: 0; background: transparent; border-radius: 12px; cursor: pointer; transition: box-shadow 0.18s, background 0.18s; }
+.spot { position: absolute; padding: 0; border: 0; background: transparent; border-radius: 12px; cursor: pointer; transition: box-shadow 0.25s ease, background 0.25s ease, backdrop-filter 0.25s ease; }
 .spots.using .spot { cursor: copy; }
 .spot:disabled { cursor: progress; opacity: 1; }
-.spots.hinted .spot:hover:not(:disabled), .spot.active, .spot:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(232, 184, 102, 0.75), 0 0 26px rgba(232, 184, 102, 0.18); background: rgba(232, 184, 102, 0.05); }
+/* The hovered object brightens; the spotlight layer dims everything else (no outline). */
+.spot:hover:not(:disabled), .spot.active, .spot:focus-visible {
+  backdrop-filter: brightness(1.25) saturate(1.15);
+  -webkit-backdrop-filter: brightness(1.25) saturate(1.15);
+}
+.spotlight { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity 0.25s ease; }
+.spotlight.on { opacity: 1; }
+.spot:hover .spot-mark { animation: none; }
 .spot:focus-visible { outline: none; }
 .spot-mark { position: absolute; width: 10px; height: 10px; translate: -50% -50%; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 3px rgba(232, 184, 102, 0.22), 0 0 14px rgba(232, 184, 102, 0.7); animation: mark 2.6s ease-out infinite; }
 @keyframes mark { 0% { box-shadow: 0 0 0 0 rgba(232, 184, 102, 0.45), 0 0 14px rgba(232, 184, 102, 0.7); } 70%, 100% { box-shadow: 0 0 0 12px rgba(232, 184, 102, 0), 0 0 14px rgba(232, 184, 102, 0.7); } }
@@ -535,6 +542,33 @@ button.tl-title { display: block; width: 100%; white-space: normal; overflow-wra
 .assets li { display: grid; gap: 0.25rem; }
 .assets img, .asset-empty { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: block; background: var(--panel); }
 .assets .status { font-size: 0.7rem; text-transform: capitalize; }
+
+/* "Powered by Kane CLI" */
+.kane-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: max-content;
+  max-width: 100%;
+  color: var(--cyan);
+  text-decoration: none;
+  border: 1px solid rgba(120, 201, 212, 0.35);
+  background: rgba(120, 201, 212, 0.08);
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+.kane-badge:hover { border-color: var(--cyan); background: rgba(120, 201, 212, 0.14); }
+.kane-badge strong { font-weight: 600; color: var(--ink); }
+.kane-badge.pill { font-size: 0.72rem; padding: 0.18rem 0.6rem 0.18rem 0.45rem; }
+.kane-badge.hero { font-size: 0.88rem; padding: 0.4rem 0.95rem 0.4rem 0.7rem; white-space: normal; }
+.kane-badge.hero svg { width: 17px; height: 17px; flex: none; }
+.topbar-left .kane-badge { align-self: center; }
+.director-head .kane-badge { margin-top: 0.5rem; }
+@media (max-width: 1100px) {
+  .topbar-left .kane-badge span { display: none; }
+  .topbar-left .kane-badge { padding: 0.25rem; }
+}
 
 /* ---------- narrow screens ---------- */
 @media (max-width: 1100px) {

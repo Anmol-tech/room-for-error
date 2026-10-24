@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { ActionView, HintResult, SessionView } from "../../shared/schema.ts";
+import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
 import { DirectorPanel } from "./DirectorPanel.tsx";
 import { Ending } from "./Ending.tsx";
@@ -412,6 +413,7 @@ function TopBar({ view, hints, muted, onToggleSound, onPause, onDirector }: TopB
           Room for Error
         </Link>
         <span className="mission">{view.title}</span>
+        <KaneBadge />
       </div>
       <div className="topbar-center">
         <span className="room-title" data-testid="room-name">

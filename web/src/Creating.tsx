@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { AdventureSummary, GenStageKey, GenStageStatus } from "../../shared/schema.ts";
+import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
 
 const LABELS: Record<GenStageKey, string> = {
@@ -81,9 +82,9 @@ export function Creating() {
           </Link>
         )}
         {!failed && (
-          <p className="kane-line">
-            <span className="kane-dot" aria-hidden /> Kane path checks connect on event day.
-          </p>
+          <KaneBadge>
+            Next, <strong>Kane CLI</strong> plays every escape route
+          </KaneBadge>
         )}
 
         {(adventure?.error || error) && (

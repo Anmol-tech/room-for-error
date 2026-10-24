@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { SessionView } from "../../shared/schema.ts";
+import { KaneBadge } from "./KaneBadge.tsx";
 import { elapsed } from "./Overlays.tsx";
 
 interface Props {
@@ -22,6 +23,13 @@ export function Ending({ view, onTryOther, testMode }: Props) {
       {view.imageUrl && <div className="ending-art" style={{ backgroundImage: `url(${view.imageUrl})` }} aria-hidden />}
       <section className="ending-body" data-testid="ending">
         <p className="ending-kicker">Ending reached</p>
+        {view.kane?.state === "passed" ? (
+          <KaneBadge variant="hero">
+            Every route in this room was verified by <strong>Kane CLI</strong>
+          </KaneBadge>
+        ) : (
+          <KaneBadge variant="hero" />
+        )}
         <h2>{ending.title}</h2>
         <p className="ending-text">{ending.text}</p>
 

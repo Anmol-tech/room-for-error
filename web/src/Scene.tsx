@@ -28,6 +28,7 @@ interface Props {
 export function Scene({ url, alt, hotspots, actions, disabled, showHints, selectedItem, onAction, onUse, children }: Props) {
   const [layers, setLayers] = useState<{ url: string; key: number }[]>([]);
   const [inspecting, setInspecting] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,6 +59,8 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
   const spots = current === url ? layoutHotspots(hotspots) : [];
   const keyOf = (s: PlacedHotspot) => s.actionIds.join();
   const open = spots.find((s) => keyOf(s) === inspecting) ?? null;
+  // The spotlit object: the one under the pointer or keyboard focus, else the one being inspected.
+  const lit = spots.find((s) => keyOf(s) === hovered) ?? open;
 
   function pick(spot: PlacedHotspot) {
     if (selectedItem) onUse(spot.actionIds);
@@ -76,6 +79,17 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
       ))}
       <div className="canvas-vignette" aria-hidden />
 
+      {/* Spotlight: dims the scene around the hovered object (an SVG mask with a cut-out). */}
+      <svg className={`spotlight ${lit ? "on" : ""}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+        <defs>
+          <mask id="spotlight-mask">
+            <rect width="100" height="100" fill="white" />
+            {lit && <rect x={lit.x * 100} y={lit.y * 100} width={lit.w * 100} height={lit.h * 100} rx="1.2" fill="black" />}
+          </mask>
+        </defs>
+        <rect width="100" height="100" fill="rgba(8, 8, 10, 0.55)" mask="url(#spotlight-mask)" />
+      </svg>
+
       <div className={`spots ${showHints ? "hinted" : ""} ${selectedItem ? "using" : ""}`}>
         {spots.map((spot) => {
           const spotActions = spot.actionIds.map((id) => byId.get(id)).filter((a): a is ActionView => !!a);
@@ -91,6 +105,10 @@ export function Scene({ url, alt, hotspots, actions, disabled, showHints, select
               aria-label={label}
               disabled={disabled}
               onClick={() => pick(spot)}
+              onMouseEnter={() => setHovered(keyOf(spot))}
+              onMouseLeave={() => setHovered((h) => (h === keyOf(spot) ? null : h))}
+              onFocus={() => setHovered(keyOf(spot))}
+              onBlur={() => setHovered((h) => (h === keyOf(spot) ? null : h))}
             >
               {showHints && <span className="spot-mark" style={{ left: `${spot.markerX * 100}%`, top: `${spot.markerY * 100}%` }} aria-hidden />}
               <span className={`spot-name ${spot.y < 0.15 ? "below" : ""}`} style={{ left: `${spot.markerX * 100}%` }} aria-hidden>

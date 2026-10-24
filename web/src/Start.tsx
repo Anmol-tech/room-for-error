@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AdventureSummary } from "../../shared/schema.ts";
+import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
 import { updateSettings, useSettings, type NarrationSpeed } from "./settings.ts";
 import { useSound } from "./useSound.ts";
@@ -95,6 +96,9 @@ export function Start() {
           ))}
         </div>
         <p className="start-meta">Three rooms · Two puzzles · Two possible endings</p>
+        <KaneBadge variant="hero">
+          Every escape route is play-tested by <strong>Kane CLI</strong> before you enter
+        </KaneBadge>
 
         {directorOn === false && <p className="notice">New rooms need a story model key on the server. The ready rooms below still play.</p>}
         {error && (

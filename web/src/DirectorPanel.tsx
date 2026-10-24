@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DirectorView as DirectorData, KaneRun, KaneView, Repair, RouteReadiness } from "../../shared/schema.ts";
+import { KaneBadge } from "./KaneBadge.tsx";
 import { api } from "./api.ts";
 import { useEscape } from "./Overlays.tsx";
 
@@ -120,6 +121,7 @@ export function DirectorPanel({ adventureId, sessionVersion, onClose }: Props) {
         <div>
           <h2 id="director-title">Director View</h2>
           <p>Live generation, testing, and repair</p>
+          <KaneBadge />
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close Director View">
           ×
