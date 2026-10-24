@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import type { LockSkin } from "./lockSkin.tsx";
 import { useEffect, useState, type FormEvent } from "react";
 import type { ActionView } from "../../shared/schema.ts";
 import type { LockKind } from "../../shared/schema.ts";
@@ -17,13 +19,17 @@ interface Props {
   rejected: number;
   status: string | null;
   notes: { id: string; title: string; text: string }[];
+  /** Look matched to the object and room (terminal, brass, stone...). */
+  skin: LockSkin;
+  /** Close-up of the object cut from the room picture. */
+  closeup: ReactNode;
 }
 
 /**
  * Symbol wheels, switch panels and torn notes. Every control is a labeled button, so players can
  * use the keyboard and Kane can operate it. The answer is checked on the server.
  */
-export function Mechanism({ name, action, onSubmit, onClose, busy, rejected, status, notes }: Props) {
+export function Mechanism({ name, action, onSubmit, onClose, busy, rejected, status, notes, skin, closeup }: Props) {
   const options = action.inputOptions ?? [];
   const [wheels, setWheels] = useState<number[]>(() => Array.from({ length: action.inputSlots ?? 3 }, () => 0));
   const [switches, setSwitches] = useState<boolean[]>(() => options.map(() => false));
@@ -69,7 +75,8 @@ export function Mechanism({ name, action, onSubmit, onClose, busy, rejected, sta
 
   return (
     <div className="modal-scrim keypad-scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form key={rejected} className={`keypad mechanism ${rejected ? "rejected" : ""}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="mech-name">
+      <form key={rejected} data-skin={skin} className={`keypad mechanism ${rejected ? "rejected" : ""}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="mech-name">
+        {closeup}
         <h2 id="mech-name">{name}</h2>
         <p className="keypad-prompt">{action.inputPrompt}</p>
 

@@ -9,6 +9,7 @@ import { Inventory } from "./Inventory.tsx";
 import { KaneWindow } from "./KaneWindow.tsx";
 import { Keypad } from "./Keypad.tsx";
 import { LOCK_TAG, Mechanism } from "./Mechanism.tsx";
+import { LockCloseup, lockSkin } from "./lockSkin.tsx";
 import { Narration } from "./Narration.tsx";
 import { HistorySheet, NotebookSheet, PauseMenu, RoomTransition } from "./Overlays.tsx";
 import { Scene } from "./Scene.tsx";
@@ -320,7 +321,10 @@ export function Game() {
   }
 
   const selectedItem = view.inventory.find((i) => i.id === selected) ?? null;
-  const lockName = codeAction ? (view.hotspots.find((h) => h.actionId === codeAction.id)?.object ?? codeAction.label) : "";
+  const lockSpot = codeAction ? view.hotspots.find((h) => h.actionId === codeAction.id) : undefined;
+  const lockName = codeAction ? (lockSpot?.object ?? codeAction.label) : "";
+  const skin = codeAction ? lockSkin(lockSpot?.object, codeAction.label, codeAction.inputPrompt, view.roomName, view.roomDescription, view.title) : "plain";
+  const closeup = lockSpot && view.imageUrl ? <LockCloseup url={view.imageUrl} spot={lockSpot} /> : null;
 
   return (
     <div className="game-page">
@@ -416,6 +420,8 @@ export function Game() {
           rejected={rejected}
           status={view.messageKind === "error" ? view.message : null}
           notes={view.notebook}
+          skin={skin}
+          closeup={closeup}
         />
       )}
       {codeAction && (!codeAction.inputKind || codeAction.inputKind === "code") && (
@@ -430,6 +436,8 @@ export function Game() {
           rejected={rejected}
           status={view.messageKind === "error" ? view.message : null}
           notes={view.notebook}
+          skin={skin}
+          closeup={closeup}
         />
       )}
       {layers}

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import type { LockSkin } from "./lockSkin.tsx";
 import { useEffect, useRef, type FormEvent } from "react";
 import { play } from "./sound.ts";
 
@@ -16,12 +18,16 @@ interface Props {
   status: string | null;
   /** The player's notebook, kept beside the lock so clues never need to be memorised. */
   notes: { id: string; title: string; text: string }[];
+  /** Look matched to the object and room (terminal, brass, stone...). */
+  skin: LockSkin;
+  /** Close-up of the object cut from the room picture. */
+  closeup: ReactNode;
 }
 
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "clear", "0", "back"];
 
 /** Focused keypad dialog. Validation happens on the server; the field stays typeable. */
-export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy, rejected, status, notes }: Props) {
+export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy, rejected, status, notes, skin, closeup }: Props) {
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -49,7 +55,8 @@ export function Keypad({ name, prompt, value, onChange, onSubmit, onClose, busy,
 
   return (
     <div className="modal-scrim keypad-scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form key={rejected} className={`keypad ${rejected ? "rejected" : ""}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="keypad-name">
+      <form key={rejected} data-skin={skin} className={`keypad ${rejected ? "rejected" : ""}`} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="keypad-name">
+        {closeup}
         <h2 id="keypad-name">{name}</h2>
         <label htmlFor="code" className="keypad-prompt">
           {prompt}

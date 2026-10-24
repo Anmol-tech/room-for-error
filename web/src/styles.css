@@ -868,3 +868,101 @@ a.text-btn { text-decoration: none; }
   100% { transform: scale(0.3); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .place-item { animation: none; opacity: 0; } }
+
+/* ---------- Lock close-up and themed skins ---------- */
+.lock-closeup { width: calc(100% + 2.6rem); margin: -1.3rem -1.3rem 0.2rem; border-radius: 16px 16px 0 0; background-repeat: no-repeat; position: relative; max-height: 170px; box-shadow: inset 0 -40px 40px -20px var(--panel); }
+.lock-closeup::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.55)); }
+.keypad[data-skin] { width: min(360px, 100%); }
+.keypad.mechanism[data-skin] { width: min(460px, 100%); }
+.keypad[data-skin] h2 { position: relative; }
+
+/* Terminal: black glass, phosphor green, scanlines. */
+.keypad[data-skin="terminal"] {
+  --panel: #040a09; --panel-2: #071512; --ink: #b9ffe0; --muted: #4fae8a; --amber: #5dffb0; --amber-soft: rgba(93, 255, 176, 0.12);
+  --line: rgba(93, 255, 176, 0.18); --line-2: rgba(93, 255, 176, 0.35); --coral: #ff6b6b;
+  border: 1px solid var(--line-2);
+  background: repeating-linear-gradient(0deg, rgba(93, 255, 176, 0.035) 0 1px, transparent 1px 3px), radial-gradient(ellipse at top, #0b1d18, #030706 70%);
+  box-shadow: 0 0 0 1px #000, 0 0 40px rgba(93, 255, 176, 0.12), 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+.keypad[data-skin="terminal"] h2 { font: 600 1.15rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); text-shadow: 0 0 10px rgba(93, 255, 176, 0.6); }
+.keypad[data-skin="terminal"] h2::before { content: "> "; opacity: 0.7; }
+.keypad[data-skin="terminal"] .keypad-display, .keypad[data-skin="terminal"] .wheel-face { background: #010403; color: var(--amber); text-shadow: 0 0 8px rgba(93, 255, 176, 0.8); font-family: var(--mono); border-color: var(--line-2); }
+.keypad[data-skin="terminal"] .keypad-grid button { background: transparent; border-color: var(--line-2); color: var(--amber); font-family: var(--mono); border-radius: 4px; }
+.keypad[data-skin="terminal"] .keypad-grid button:hover:not(:disabled) { background: var(--amber-soft); box-shadow: 0 0 12px rgba(93, 255, 176, 0.3); }
+.keypad[data-skin="terminal"] .btn-primary { background: var(--amber); border-color: var(--amber); color: #021009; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em; border-radius: 4px; }
+.keypad[data-skin="terminal"] .btn-ghost { border-radius: 4px; font-family: var(--mono); }
+
+/* Brass: walnut case, brass keys, engraved serif figures, rivets. */
+.keypad[data-skin="brass"] {
+  --panel: #1f150d; --panel-2: #2b1d11; --ink: #f6e6c4; --muted: #c9a96e; --amber: #e2b85c; --amber-soft: rgba(226, 184, 92, 0.16);
+  --line: rgba(226, 184, 92, 0.22); --line-2: rgba(226, 184, 92, 0.45);
+  border: 2px solid #9c7333;
+  background: radial-gradient(ellipse at 30% 0%, #3a2715, #160e07 75%);
+  box-shadow: inset 0 0 0 4px #160e07, inset 0 0 0 5px rgba(226, 184, 92, 0.35), 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+.keypad[data-skin="brass"]::before, .keypad[data-skin="brass"]::after { content: ""; position: absolute; top: 10px; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fbe3a6, #8a6326); box-shadow: 0 1px 2px #000; }
+.keypad[data-skin="brass"]::before { left: 10px; }
+.keypad[data-skin="brass"]::after { right: 10px; }
+.keypad[data-skin="brass"] { position: relative; }
+.keypad[data-skin="brass"] h2 { font-family: var(--serif); color: #f0cf86; text-shadow: 0 1px 0 #000; }
+.keypad[data-skin="brass"] .keypad-prompt { font-family: var(--serif); letter-spacing: 0.04em; text-transform: none; font-size: 0.95rem; font-style: italic; }
+.keypad[data-skin="brass"] .keypad-display, .keypad[data-skin="brass"] .wheel-face { background: linear-gradient(#0d0804, #1c130a); color: #f3d38c; font-family: var(--serif); border: 2px solid #9c7333; box-shadow: inset 0 3px 10px #000; }
+.keypad[data-skin="brass"] .keypad-grid { gap: 0.6rem; justify-items: center; }
+.keypad[data-skin="brass"] .keypad-grid button { width: 58px; height: 58px; border-radius: 50%; border: 1px solid #5c3f14; background: radial-gradient(circle at 35% 30%, #fff1c4, #d8ac55 40%, #8a6326 85%); color: #2a1a06; font: 600 1.35rem var(--serif); box-shadow: 0 3px 0 #4a3210, 0 5px 10px rgba(0, 0, 0, 0.6); }
+.keypad[data-skin="brass"] .keypad-grid button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #4a3210; }
+.keypad[data-skin="brass"] .keypad-grid .keypad-fn { font: 600 0.72rem var(--sans); color: #3a2508; }
+.keypad[data-skin="brass"] .btn-primary { background: linear-gradient(#f0cf86, #b8893d); border-color: #6e4f1e; color: #2a1a06; font-family: var(--serif); font-size: 1.05rem; }
+
+/* Stone: carved slab, inset glyphs. */
+.keypad[data-skin="stone"] {
+  --panel: #3b3936; --panel-2: #4a4743; --ink: #ece6d8; --muted: #b9b1a1; --amber: #d8c79c; --amber-soft: rgba(216, 199, 156, 0.15);
+  --line: rgba(0, 0, 0, 0.35); --line-2: rgba(255, 255, 255, 0.14);
+  border: 1px solid #22201d;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.05) 0 2px, transparent 3px) 0 0 / 23px 19px,
+    radial-gradient(circle at 70% 60%, rgba(0, 0, 0, 0.12) 0 2px, transparent 3px) 0 0 / 31px 27px,
+    linear-gradient(160deg, #57534d, #34312d 70%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), inset 0 -6px 18px rgba(0, 0, 0, 0.45), 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+.keypad[data-skin="stone"] h2 { font-family: var(--serif); color: #efe7d4; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.12); letter-spacing: 0.04em; }
+.keypad[data-skin="stone"] .keypad-prompt { letter-spacing: 0.22em; color: #c9bfa9; }
+.keypad[data-skin="stone"] .keypad-display, .keypad[data-skin="stone"] .wheel-face { background: #2c2a27; color: #efe3c2; font-family: var(--serif); border: none; box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.1); }
+.keypad[data-skin="stone"] .keypad-grid button { background: #4a4743; border: none; color: #e9dfc8; font-family: var(--serif); font-size: 1.4rem; border-radius: 6px; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.1), inset 0 -3px 0 rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.4); }
+.keypad[data-skin="stone"] .keypad-grid button:active:not(:disabled) { box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.6); }
+.keypad[data-skin="stone"] .btn-primary { background: #d8c79c; border-color: #8f8162; color: #2a261f; font-family: var(--serif); font-size: 1.05rem; }
+
+/* Wood: grain, iron fittings, parchment display. */
+.keypad[data-skin="wood"] {
+  --panel: #3a2516; --panel-2: #4a3020; --ink: #f6ead2; --muted: #d4b58a; --amber: #e9b45f; --amber-soft: rgba(233, 180, 95, 0.15);
+  --line: rgba(0, 0, 0, 0.35); --line-2: rgba(255, 220, 170, 0.18);
+  border: 3px solid #1e1712;
+  background: repeating-linear-gradient(95deg, rgba(0, 0, 0, 0.08) 0 2px, transparent 2px 9px), repeating-linear-gradient(88deg, rgba(255, 210, 150, 0.04) 0 1px, transparent 1px 23px), linear-gradient(180deg, #5a3a22, #3a2515);
+  box-shadow: inset 0 0 0 2px #6b6158, inset 0 0 0 6px #1e1712, 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+.keypad[data-skin="wood"] h2 { font-family: var(--serif); color: #f7e3bd; text-shadow: 0 2px 2px rgba(0, 0, 0, 0.6); }
+.keypad[data-skin="wood"] .keypad-display, .keypad[data-skin="wood"] .wheel-face { background: #ece0c4; color: #2a1d10; font-family: var(--serif); border: 2px solid #1e1712; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35); }
+.keypad[data-skin="wood"] .keypad-grid button { background: linear-gradient(#55504b, #2b2724); border: 1px solid #141110; color: #efe4d0; font-family: var(--serif); font-size: 1.3rem; border-radius: 6px; box-shadow: 0 3px 0 #0f0c0a, inset 0 1px 0 rgba(255, 255, 255, 0.15); }
+.keypad[data-skin="wood"] .keypad-grid button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #0f0c0a; }
+.keypad[data-skin="wood"] .btn-primary { background: linear-gradient(#f0c070, #b7832f); border-color: #6b4a1c; color: #2a1a06; font-family: var(--serif); font-size: 1.05rem; }
+
+/* Industrial: steel plate, hazard stripe, LCD, chunky keys. */
+.keypad[data-skin="industrial"] {
+  --panel: #23272b; --panel-2: #2e3337; --ink: #e8ecef; --muted: #9aa4ab; --amber: #f2c230; --amber-soft: rgba(242, 194, 48, 0.14);
+  --line: rgba(255, 255, 255, 0.08); --line-2: rgba(255, 255, 255, 0.18);
+  border: 1px solid #0f1113;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 40%), linear-gradient(#2c3135, #1d2023);
+  box-shadow: inset 0 6px 0 -0px transparent, 0 30px 80px rgba(0, 0, 0, 0.7);
+  position: relative; overflow: hidden;
+}
+.keypad[data-skin="industrial"]::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 8px; background: repeating-linear-gradient(-45deg, #f2c230 0 10px, #111 10px 20px); }
+.keypad[data-skin="industrial"] .lock-closeup { margin-top: calc(-1.3rem + 8px); border-radius: 0; }
+.keypad[data-skin="industrial"] h2 { font: 700 1.1rem var(--sans); text-transform: uppercase; letter-spacing: 0.1em; color: #f2c230; }
+.keypad[data-skin="industrial"] .keypad-display, .keypad[data-skin="industrial"] .wheel-face { background: #a9b98f; color: #1d2614; font-family: var(--mono); border: 3px solid #111; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45); }
+.keypad[data-skin="industrial"] .keypad-grid button { background: linear-gradient(#4a5157, #33393e); border: 1px solid #0f1113; color: #f1f3f4; font: 700 1.2rem var(--sans); border-radius: 6px; box-shadow: 0 4px 0 #0f1113; }
+.keypad[data-skin="industrial"] .keypad-grid button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #0f1113; }
+.keypad[data-skin="industrial"] .btn-primary { background: #f2c230; border-color: #8a6d12; color: #151200; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+.keypad[data-skin="industrial"] .panel-switch { background: #1a1d20; border-color: #0f1113; }
+.keypad[data-skin="industrial"] .panel-switch.on { border-color: #f2c230; }
+
+/* Notes inside skinned locks keep their own paper look. */
+.keypad[data-skin]:not([data-skin="plain"]) .keypad-notes { background: rgba(0, 0, 0, 0.3); border-color: var(--line-2); }
