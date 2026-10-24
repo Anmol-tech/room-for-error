@@ -185,6 +185,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .gen-stage.failed { color: var(--coral); }
 .gen-stage.failed .stage-dot { border-color: var(--coral); background: var(--coral); color: #2a0e0b; }
 .enter-btn { margin-top: 0.4rem; padding: 0.85rem 2rem; font-size: 1rem; animation: rise 0.4s ease both; }
+.arrival-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin-top: 0.4rem; }
 .kane-line { font-size: 0.82rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.45rem; }
 .kane-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); animation: breathe 2s ease-in-out infinite; }
 

@@ -9,7 +9,9 @@ import { listLibrary,
   hint,
   listAdventures,
   NotFound,
+  resetInterruptedBuilds,
   resumeRendering,
+  retryAdventure,
   seedPreparedMissions,
   startAdventure,
   use,
@@ -48,6 +50,15 @@ app.get("/api/library", (_req, res) => {
 
 app.get("/api/adventures/:id", (req, res) => {
   res.json(getAdventure(req.params.id));
+});
+
+/** Builds a failed adventure again from its theme, at the same address. */
+app.post("/api/adventures/:id/retry", (req, res) => {
+  if (!directorEnabled()) {
+    res.status(503).json({ error: "No LLM key is set (OPENROUTER_API_KEY or OPENAI_API_KEY), so the room can't be generated again." });
+    return;
+  }
+  res.status(202).json(retryAdventure(req.params.id));
 });
 
 app.get("/api/adventures/:id/director", (req, res) => {
@@ -130,6 +141,7 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 app.use(onError);
 
 resetInterruptedRenders();
+resetInterruptedBuilds();
 resetInterruptedRuns();
 resetInterruptedExplorations();
 seedPreparedMissions();

@@ -25,6 +25,9 @@ export function Creating() {
   const { id = "" } = useParams();
   const [adventure, setAdventure] = useState<AdventureSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again" to restart polling while the room is built again.
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     let stop = false;
@@ -42,7 +45,20 @@ export function Creating() {
     return () => {
       stop = true;
     };
-  }, [id]);
+  }, [id, attempt]);
+
+  async function retry() {
+    setRetrying(true);
+    setError(null);
+    try {
+      setAdventure(await api.retryAdventure(id));
+      setAttempt((n) => n + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   const stages = adventure?.stages ?? [];
   const placed = stages.find((s) => s.key === "placing")?.status === "complete";
@@ -93,9 +109,14 @@ export function Creating() {
           </p>
         )}
         {failed && (
-          <Link to="/" className="btn-ghost">
-            Try another theme
-          </Link>
+          <div className="arrival-actions">
+            <button type="button" className="btn-primary" onClick={retry} disabled={retrying} autoFocus>
+              {retrying ? "Starting again…" : "Try again"}
+            </button>
+            <Link to="/" className="btn-ghost">
+              Try another theme
+            </Link>
+          </div>
         )}
       </main>
     </div>

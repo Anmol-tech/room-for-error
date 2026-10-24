@@ -164,17 +164,48 @@ export function listLibrary(): LibraryEntry[] {
   });
 }
 
+const freshStages = () => JSON.stringify(STAGE_KEYS.map((key, i) => ({ key, status: i === 0 ? "active" : "pending" })));
+
 export function startAdventure(theme: string): AdventureSummary {
   const slug = theme.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32) || "adventure";
   const id = `${slug}-${randomUUID().slice(0, 6)}`;
-  const stages = STAGE_KEYS.map((key, i) => ({ key, status: i === 0 ? "active" : "pending" }));
-  db.prepare("INSERT INTO adventures (id, theme, status, stages) VALUES (?, ?, 'planning', ?)").run(id, theme, JSON.stringify(stages));
+  db.prepare("INSERT INTO adventures (id, theme, status, stages) VALUES (?, ?, 'planning', ?)").run(id, theme, freshStages());
   void build(id, theme);
   return getAdventure(id);
 }
 
+/**
+ * Builds a failed adventure again from its theme, keeping its id and address. The director writes
+ * a new scenario; a failed adventure was never playable, so nothing (no player, no Kane run) used
+ * the old one.
+ */
+export function retryAdventure(id: string): AdventureSummary {
+  const row = getAdventureRow(id);
+  if (row.status !== "failed" || row.prepared || building.has(id)) return getAdventure(id);
+  // Forget the failed scenario so the page doesn't show its title while the new one is written.
+  db.prepare("UPDATE adventures SET status = 'planning', error = NULL, current_version = NULL, validator_issues = '[]', stages = ? WHERE id = ?").run(freshStages(), id);
+  void build(id, row.theme);
+  return getAdventure(id);
+}
+
+/** Builds cut off by a server restart can't resume; mark them failed so they can be retried. */
+export function resetInterruptedBuilds(): void {
+  const rows = db.prepare("SELECT * FROM adventures WHERE prepared = 0 AND status IN ('planning', 'rendering')").all() as AdventureRow[];
+  for (const row of rows) {
+    const stages = readStages(row).map((s) => (s.status === "active" || s.status === "retrying" ? { ...s, status: "failed" as const } : s));
+    db.prepare("UPDATE adventures SET status = 'failed', error = ?, stages = ? WHERE id = ?").run(
+      "The server restarted while this room was being built.",
+      JSON.stringify(stages),
+      row.id,
+    );
+  }
+}
+
+const building = new Set<string>();
+
 async function build(id: string, theme: string): Promise<void> {
   let stage: GenStageKey = "writing";
+  building.add(id);
   try {
     const { scenario, issues } = await createScenario(theme, id, () => setStage(id, "writing", "retrying"));
     setStage(id, "writing", "complete");
@@ -205,6 +236,8 @@ async function build(id: string, theme: string): Promise<void> {
   } catch (err) {
     setStage(id, stage, "failed");
     setStatus(id, "failed", err instanceof Error ? err.message : String(err));
+  } finally {
+    building.delete(id);
   }
 }
 
