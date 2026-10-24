@@ -33,11 +33,24 @@ export const RequirementsSchema = z.object({
   flags: z.array(z.string()).optional(),
 });
 
+/**
+ * How a lock is operated. The answer is always a string the engine compares (ignoring case,
+ * spaces, dashes and dots):
+ * - code: typed digits or a word, e.g. "4417".
+ * - symbols: wheels that each cycle through `options`; answer is one symbol per wheel, comma-separated: "sun,leaf,moon".
+ * - switches: one on/off switch per entry in `options`; answer is "on"/"off" per switch, comma-separated: "on,off,on".
+ * - order: torn-note fragments to put in order; answer is the fragments in the right order, joined by " | ".
+ */
+export const LockKindSchema = z.enum(["code", "symbols", "switches", "order"]);
+export type LockKind = z.infer<typeof LockKindSchema>;
+
 export const CodeInputSchema = z.object({
-  kind: z.literal("code"),
+  kind: LockKindSchema,
   prompt: z.string(),
   answer: z.string(),
   failMessage: z.string(),
+  /** symbols: the symbols every wheel cycles through. switches: the switch labels, in panel order. */
+  options: z.array(z.string()).optional(),
 });
 
 export const EffectsSchema = z.object({
@@ -287,8 +300,13 @@ export interface ActionView {
   id: Id;
   label: string;
   locked: boolean;
-  /** Present when the action needs a typed code. */
+  /** Present when the action needs an answer (a code or a mechanism). */
   inputPrompt?: string;
+  inputKind?: LockKind;
+  /** symbols: what each wheel cycles through. switches: switch labels. order: the fragments, shuffled. Never the answer. */
+  inputOptions?: string[];
+  /** symbols: how many wheels. */
+  inputSlots?: number;
 }
 
 export interface SessionView {
@@ -307,6 +325,8 @@ export interface SessionView {
   hotspots: Hotspot[];
   actions: ActionView[];
   inventory: { id: Id; name: string; description: string; icon: string | null; imageUrl: string | null }[];
+  /** One-time actions already done in this room; their objects stay in the picture, marked solved. */
+  solved: { actionId: Id; label: string; narrative: string }[];
   /** Clues the player has actually found (derived notes), kept apart from usable items. */
   notebook: { id: Id; title: string; text: string; where: string }[];
   /** Result of the last action: narrative, locked message, or failed code. */
