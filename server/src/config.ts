@@ -4,6 +4,8 @@ import path from "node:path";
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const ASSETS_DIR = path.join(ROOT, "assets");
 export const MISSIONS_DIR = path.join(ROOT, "missions");
+/** The built web app (npm run build). When it exists, the API server serves it too. */
+export const WEB_DIST = path.join(ROOT, "web", "dist");
 export const DB_PATH = path.join(ASSETS_DIR, "room-for-error.db");
 
 // Not PORT: dev launchers set PORT to the web port (5180), which would clash with Vite.

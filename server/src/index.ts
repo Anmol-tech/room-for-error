@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import express, { type ErrorRequestHandler } from "express";
 import { z } from "zod";
 import { listLibrary,
@@ -18,7 +20,7 @@ import { listLibrary,
   startAdventure,
   use,
 } from "./adventures.ts";
-import { ASSETS_DIR, LLM, PORT } from "./config.ts";
+import { ASSETS_DIR, LLM, PORT, WEB_DIST } from "./config.ts";
 import { directorEnabled } from "./director.ts";
 import { fluxEnabled, resetInterruptedRenders } from "./flux.ts";
 import { getRun, kaneView, rehearse, resetInterruptedRuns } from "./rehearsal.ts";
@@ -136,6 +138,12 @@ app.get("/api/preview/:runId", (req, res) => {
   if (!run) throw new NotFound(`No Kane run ${req.params.runId}`);
   res.json({ scenarioId: run.scenarioId, sessionId: run.sessionId, version: run.scenarioVersion });
 });
+
+// Hosted: one process serves the built web app as well (npm run build). In development Vite does.
+if (existsSync(WEB_DIST)) {
+  app.use(express.static(WEB_DIST, { index: false, maxAge: "1h" }));
+  app.get(/^\/(?!api\/|assets\/).*/, (_req, res) => res.sendFile(path.join(WEB_DIST, "index.html")));
+}
 
 const onError: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof NotFound) res.status(404).json({ error: err.message });
