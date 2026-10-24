@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { Hotspot, ImageStatus, Item, Room, Scenario } from "../../shared/schema.ts";
+import type { Action, Hotspot, ImageStatus, Item, Room, Scenario } from "../../shared/schema.ts";
 import { ASSETS_DIR, BFL_API_KEY, BFL_MODEL, IMAGE_CONCURRENCY, IMAGE_HEIGHT, IMAGE_WIDTH, VISION_MODEL } from "./config.ts";
 import { db } from "./db.ts";
 import { detectHotspots, hotspotsEnabled } from "./hotspots.ts";
@@ -36,10 +36,20 @@ export function promptFor(scenario: Scenario, room: Room, sceneStateId: string):
 const hash = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
 /** Changes whenever a room gains, loses or relabels actions, so hotspots get re-detected. */
-function hotspotSignature(scenario: Scenario, room: Room): string {
-  // "v2": detection also returns object names and descriptions. The model is part of it, so
-  // switching vision models re-detects old scenes the next time they're shown.
-  return hash("v2" + VISION_MODEL + JSON.stringify(scenario.actions.filter((a) => a.roomId === room.id).map((a) => [a.id, a.label])));
+function hotspotSignature(scenario: Scenario, room: Room, version = "v3"): string {
+  // "v2": detection also returns object names and descriptions. "v3": opening scenes missing an
+  // object get one repaint. The model is part of it, so switching vision models re-detects.
+  return hash(version + VISION_MODEL + JSON.stringify(scenario.actions.filter((a) => a.roomId === room.id).map((a) => [a.id, a.label])));
+}
+
+/** Actions a player must be able to find in a room's opening picture: those that don't wait on story flags. */
+function mustBeVisible(scenario: Scenario, room: Room): Action[] {
+  return scenario.actions.filter((a) => a.roomId === room.id && !a.requires?.flags?.length);
+}
+
+/** "Search the helm" -> "helm", "Go to the hold" -> "hold". */
+export function objectOf(label: string): string {
+  return label.replace(/^\s*\w+\s+/, "").replace(/^(?:(?:to|into|through|at|on|in|under|behind|inside|the|a|an)\s+)+/i, "").trim() || label;
 }
 
 export function imageRow(scenario: Scenario, roomId: string, sceneStateId: string): ImageRow | undefined {
@@ -114,7 +124,7 @@ async function renderOne(scenario: Scenario, room: Room, stateId: string): Promi
   const key = [scenario.id, room.id, stateId, hash(prompt)];
   const existing = imageRow(scenario, room.id, stateId);
   if (existing?.status === "ready") {
-    if (existing.path && existing.hotspots_sig !== hotspotSignature(scenario, room)) void annotate(scenario, room, existing.path, key);
+    if (existing.path && existing.hotspots_sig !== hotspotSignature(scenario, room)) await annotateFor(scenario, room, stateId, existing.path, key);
     return;
   }
   if (existing?.status === "rendering") return;
@@ -144,10 +154,16 @@ async function renderOne(scenario: Scenario, room: Room, stateId: string): Promi
     const file = path.join(IMAGES_DIR, `${key.join("_")}.jpg`);
     writeFileSync(file, bytes);
     upsert.run(...key, "ready", file, null);
-    void annotate(scenario, room, file, key);
+    await annotateFor(scenario, room, stateId, file, key);
   } catch (err) {
     upsert.run(...key, "failed", null, String(err instanceof Error ? err.message : err));
   }
+}
+
+/** The opening scene is awaited (a missing object gets painted in before the room's edits start from it); others run in the background. */
+function annotateFor(scenario: Scenario, room: Room, stateId: string, file: string, key: string[]): Promise<void> {
+  const job = annotate(scenario, room, file, key);
+  return stateId === room.sceneStates[0].id ? job : Promise.resolve();
 }
 
 const annotating = new Map<string, Promise<void>>();
@@ -174,19 +190,56 @@ export async function ensureOpeningHotspots(scenario: Scenario): Promise<void> {
 
 async function detectAndStore(scenario: Scenario, room: Room, file: string, key: string[], id: string): Promise<void> {
   const sig = hotspotSignature(scenario, room);
+  const where = "WHERE scenario_id = ? AND room_id = ? AND scene_state_id = ? AND prompt_hash = ?";
+  const prior = db.prepare(`SELECT hotspots, hotspots_sig FROM images ${where}`).get(...key) as Pick<ImageRow, "hotspots" | "hotspots_sig"> | undefined;
   let hotspots: Hotspot[] = [];
   try {
-    hotspots = await detectHotspots(scenario, room, file);
+    // Scenes detected under v2 keep their hotspots; only the missing-object check is new.
+    hotspots =
+      prior?.hotspots && prior.hotspots !== "[]" && prior.hotspots_sig === hotspotSignature(scenario, room, "v2")
+        ? JSON.parse(prior.hotspots)
+        : await detectHotspots(scenario, room, file);
+    if (key[2] === room.sceneStates[0].id) {
+      const fixed = await paintMissing(scenario, room, file, key, hotspots);
+      if (fixed) ({ file, hotspots } = fixed);
+    }
   } catch (err) {
     console.error(`[hotspots] ${id}:`, err instanceof Error ? err.message : err);
   } finally {
     annotating.delete(id);
   }
-  db.prepare("UPDATE images SET hotspots = ?, hotspots_sig = ? WHERE scenario_id = ? AND room_id = ? AND scene_state_id = ? AND prompt_hash = ?").run(
-    JSON.stringify(hotspots),
-    sig,
-    ...key,
-  );
+  db.prepare(`UPDATE images SET path = ?, hotspots = ?, hotspots_sig = ? ${where}`).run(file, JSON.stringify(hotspots), sig, ...key);
+}
+
+/**
+ * When an opening scene doesn't show an object one of its actions needs (the director forgot it in
+ * the prompt, or FLUX left it out), paints it in with one FLUX edit and detects again. One attempt;
+ * whatever is still missing stays reachable through its button.
+ */
+async function paintMissing(
+  scenario: Scenario,
+  room: Room,
+  file: string,
+  key: string[],
+  hotspots: Hotspot[],
+): Promise<{ file: string; hotspots: Hotspot[] } | null> {
+  if (!fluxEnabled() || !file.endsWith(".jpg")) return null;
+  const found = new Set(hotspots.map((h) => h.actionId));
+  const missing = mustBeVisible(scenario, room).filter((a) => !found.has(a.id));
+  if (!missing.length) return null;
+  // Exits name their destination ("Climb to deck"), so paint the way there, not the place.
+  const thing = (a: Action) => (a.effects.moveTo ? `way out (a door, ladder or hatch) leading to the ${objectOf(a.label)}` : objectOf(a.label));
+  const objects = [...new Set(missing.map(thing))];
+  console.log(`[hotspots] ${key.join("/")}: not in the picture: ${objects.join(", ")}; painting them in`);
+  const prompt = `Edit this scene: add ${objects.map((o) => `a clearly visible ${o}`).join(", ")}, each placed naturally where a player would notice it, fitting the scene. Keep the same camera angle, layout, style and everything else unchanged. No text or lettering.`;
+  const bytes = await fluxGenerate(prompt, readFileSync(file).toString("base64"));
+  const next = file.replace(/\.jpg$/, "_fix.jpg");
+  writeFileSync(next, bytes);
+  const redetected = await detectHotspots(scenario, room, next);
+  const still = mustBeVisible(scenario, room).filter((a) => !redetected.some((h) => h.actionId === a.id));
+  if (still.length) console.log(`[hotspots] ${key.join("/")}: still not in the picture: ${still.map((a) => a.label).join(", ")}`);
+  // Keep the repaint only if it found at least as many objects as before.
+  return redetected.length >= hotspots.length ? { file: next, hotspots: redetected } : null;
 }
 
 const FLUX_FAILED = new Set(["Error", "Failed", "Content Moderated", "Request Moderated", "Task not found"]);

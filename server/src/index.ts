@@ -1,6 +1,6 @@
 import express, { type ErrorRequestHandler } from "express";
 import { z } from "zod";
-import {
+import { listLibrary,
   act,
   createSession,
   directorView,
@@ -40,6 +40,10 @@ app.post("/api/adventures", (req, res) => {
     return;
   }
   res.status(201).json(startAdventure(theme));
+});
+
+app.get("/api/library", (_req, res) => {
+  res.json(listLibrary());
 });
 
 app.get("/api/adventures/:id", (req, res) => {

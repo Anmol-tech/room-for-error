@@ -55,6 +55,9 @@ export function Start() {
       <header className="start-bar">
         <span className="wordmark">Room for Error</span>
         <div className="start-bar-actions">
+          <Link to="/library" className="text-btn">
+            Library
+          </Link>
           <button type="button" className="text-btn" onClick={() => setHowOpen(true)}>
             How it works
           </button>
@@ -138,7 +141,9 @@ export function Start() {
 
         {ready.length > 0 && (
           <section className="ready-rooms" aria-label="Ready rooms">
-            <h2>Or step into a ready room</h2>
+            <h2>
+              Or step into a ready room · <Link to="/library">See all {ready.length}</Link>
+            </h2>
             <div className="ready-row">
               {ready.slice(0, 5).map((a) => (
                 <Link key={a.id} to={`/play/${a.id}`} className="ready-card">

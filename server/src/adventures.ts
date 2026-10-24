@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type {
+import type { LibraryEntry,
   AdventureStatus,
   AdventureSummary,
   DirectorView,
@@ -21,6 +21,7 @@ import { db } from "./db.ts";
 import { createScenario } from "./director.ts";
 import { applyAction, initialState, meetsRequirements, nextStep, useItem, visibleActions, type UseResult } from "./engine.ts";
 import { ensureOpeningHotspots, imageHotspots, imageRow, imageUrl, itemIconUrl, renderScenario } from "./flux.ts";
+import { withNotes, withoutNotes } from "./notes.ts";
 import { endingOpen, playerKaneState, rehearse } from "./rehearsal.ts";
 import { validateScenario, validateShape } from "./validator.ts";
 
@@ -33,6 +34,7 @@ interface AdventureRow {
   prepared: number;
   validator_issues: string;
   stages: string | null;
+  created_at: string;
 }
 
 interface SessionRow {
@@ -68,12 +70,12 @@ export function getScenario(id: string, version?: number): Scenario {
       : db.prepare("SELECT json FROM scenarios WHERE id = ? AND version = ?").get(id, version)
   ) as { json: string } | undefined;
   if (!row) throw new NotFound(`No scenario ${id}${version ? ` v${version}` : ""}`);
-  return JSON.parse(row.json);
+  return withNotes(JSON.parse(row.json));
 }
 
 /** Stores a new scenario version. Versions are immutable once stored. */
 export function saveScenarioVersion(scenario: Scenario, issues: ValidatorIssue[]): void {
-  db.prepare("INSERT OR REPLACE INTO scenarios (id, version, json) VALUES (?, ?, ?)").run(scenario.id, scenario.version, JSON.stringify(scenario));
+  db.prepare("INSERT OR REPLACE INTO scenarios (id, version, json) VALUES (?, ?, ?)").run(scenario.id, scenario.version, JSON.stringify(withoutNotes(scenario)));
   db.prepare("UPDATE adventures SET current_version = ?, validator_issues = ? WHERE id = ?").run(scenario.version, JSON.stringify(issues), scenario.id);
 }
 
@@ -140,6 +142,26 @@ export function getAdventure(id: string): AdventureSummary {
 export function listAdventures(): AdventureSummary[] {
   const rows = db.prepare("SELECT * FROM adventures ORDER BY prepared DESC, created_at DESC LIMIT 20").all() as AdventureRow[];
   return rows.map(summarize);
+}
+
+/** Every room ever generated, newest first, with play stats. Rooms live in SQLite and assets/, so they survive restarts. */
+export function listLibrary(): LibraryEntry[] {
+  const rows = db.prepare("SELECT * FROM adventures ORDER BY prepared DESC, created_at DESC").all() as AdventureRow[];
+  const stats = db.prepare(
+    "SELECT COUNT(*) AS plays, COUNT(ended_at) AS escapes FROM sessions WHERE scenario_id = ? AND kind = 'player' AND moves > 0",
+  );
+  return rows.map((row) => {
+    const scenario = row.current_version !== null ? getScenario(row.id, row.current_version) : null;
+    const { plays, escapes } = stats.get(row.id) as { plays: number; escapes: number };
+    return {
+      ...summarize(row),
+      createdAt: `${row.created_at.replace(" ", "T")}Z`, // SQLite stores UTC without a zone
+      rooms: scenario?.rooms.map((r) => r.name) ?? [],
+      plays,
+      escapes,
+      kane: scenario ? (playerKaneState(scenario)?.state ?? null) : null,
+    };
+  });
 }
 
 export function startAdventure(theme: string): AdventureSummary {

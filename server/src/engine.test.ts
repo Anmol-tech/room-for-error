@@ -87,3 +87,30 @@ test("next step heads toward an ending", () => {
   const { state } = play([["search_desk"], ["go_archive"]]);
   assert.equal(nextStep(museum, state)?.id, "inspect_terminal");
 });
+
+test("revealing a code gives the player a note with the clue", async () => {
+  const { withNotes, withoutNotes } = await import("./notes.ts");
+  const fixed = structuredClone(museum);
+  fixed.actions.find((a) => a.id === "search_desk")!.narrative = fixed.actions.find((a) => a.id === "search_desk")!.narrative.replace("4471", "4417");
+  const s = withNotes(fixed);
+  const note = s.items.find((i) => i.id === "note_inspect_terminal");
+  assert.ok(note, "note item exists");
+  assert.match(note!.description, /4417/);
+  const state = applyAction(s, initialState(s), "search_desk").state;
+  assert.ok(state.inventory.includes("note_inspect_terminal"));
+  // Stripping restores the stored shape.
+  assert.deepEqual(withoutNotes(s), fixed);
+});
+
+test("a clue whose code is wrong still becomes a note (Kane catches the mismatch)", async () => {
+  const { withNotes } = await import("./notes.ts");
+  const note = withNotes(museum).items.find((i) => i.id === "note_inspect_terminal");
+  assert.match(note!.description, /4471/);
+});
+
+test("action labels name the object to paint into a scene", async () => {
+  const { objectOf } = await import("./flux.ts");
+  assert.equal(objectOf("Search the helm"), "helm");
+  assert.equal(objectOf("Go to the hold"), "hold");
+  assert.equal(objectOf("Look at the brass porthole"), "brass porthole");
+});

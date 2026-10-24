@@ -1,4 +1,4 @@
-import type { AdventureSummary, DirectorView, HintResult, KaneLive, KaneView, SessionView } from "../../shared/schema.ts";
+import type { AdventureSummary, LibraryEntry, DirectorView, HintResult, KaneLive, KaneView, SessionView } from "../../shared/schema.ts";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -13,6 +13,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => call<{ director: boolean; flux: boolean }>("/api/health"),
   adventures: () => call<AdventureSummary[]>("/api/adventures"),
+  library: () => call<LibraryEntry[]>("/api/library"),
   createAdventure: (theme: string) => call<AdventureSummary>("/api/adventures", { method: "POST", body: JSON.stringify({ theme }) }),
   adventure: (id: string) => call<AdventureSummary>(`/api/adventures/${encodeURIComponent(id)}`),
   director: (id: string) => call<DirectorView>(`/api/adventures/${encodeURIComponent(id)}/director`),

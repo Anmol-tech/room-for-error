@@ -6,6 +6,7 @@ import { Creating } from "./Creating.tsx";
 import { Game } from "./Game.tsx";
 import { Preview } from "./Preview.tsx";
 import { ExploreEntry } from "./ExploreEntry.tsx";
+import { Library } from "./Library.tsx";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -13,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Start />} />
+        <Route path="/library" element={<Library />} />
         <Route path="/adventure/:id" element={<Creating />} />
         {/* The trailing part names the current room in test mode (see Game), so Kane sees each room as its own screen. */}
         <Route path="/play/:scenarioId/*" element={<Game />} />
